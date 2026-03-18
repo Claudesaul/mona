@@ -1,0 +1,89 @@
+import { motion } from 'framer-motion';
+
+interface LeafProps {
+  size?: number;
+  className?: string;
+  animated?: boolean;
+}
+
+/**
+ * Monumental Markets leaf logo — extracted from official SVG.
+ * When animated=true (on hover), the leaf paths glow and pulse with color shifts.
+ */
+function MonumentalLeaf({ size = 32, className = '', animated = false }: LeafProps) {
+  const scale = size / 48.59;
+  const height = 83.01 * scale;
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 48.59 83.01"
+      width={size}
+      height={height}
+      className={className}
+      style={{ overflow: 'visible' }}
+    >
+      <defs>
+        <clipPath id="leaf-clip">
+          <rect width="48.59" height="83.01" fill="none" />
+        </clipPath>
+        {/* Animated gradient for hover state */}
+        <linearGradient id="leaf-glow-dark" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#34d399" />
+          <stop offset="50%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#059669" />
+        </linearGradient>
+        <linearGradient id="leaf-glow-light" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#6ee7b7" />
+          <stop offset="50%" stopColor="#34d399" />
+          <stop offset="100%" stopColor="#10b981" />
+        </linearGradient>
+      </defs>
+      <g clipPath="url(#leaf-clip)">
+        {/* Bottom leaf — dark green, brightens on hover */}
+        <motion.path
+          d="M43.87,45.26C43.59,51.89,40.6,57.69,35,62.5A77.09,77.09,0,0,1,24.3,70.06,77.22,77.22,0,0,1,13.62,62.5C8.21,57.88,5.25,52.33,4.78,46h0V43.74L24.27,59.83,43.88,44.44c0,.27,0,.54,0,.81m4.55-4.37h0l-1-5.25-4.09,3.21-19,14.93-19-15.68-4-3.31L.28,40c-.11.82-.18,1.63-.23,2.45l0,.3H0Q0,44.11,0,45.46c.34,8,3.89,14.94,10.54,20.64A82.42,82.42,0,0,0,22,74.16V83h4.7V74.15A82.42,82.42,0,0,0,38,66.1c6.66-5.7,10.2-12.64,10.54-20.64a31,31,0,0,0-.15-4.57"
+          fill={animated ? 'url(#leaf-glow-dark)' : '#5d8047'}
+          animate={animated ? {
+            fill: ['#5d8047', '#10b981', '#34d399', '#10b981', '#5d8047'],
+          } : undefined}
+          transition={animated ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : undefined}
+        />
+        {/* Top leaf — dark green */}
+        <motion.path
+          d="M12.64,20.11l.17.14.39.32a102.47,102.47,0,0,1,11.11-14A102.18,102.18,0,0,1,35.65,20.95l.4-.31.14-.11L39.34,18A108.49,108.49,0,0,0,26,1.59l-.69-.7L24.3,0l-1,.89-.69.7a109.07,109.07,0,0,0-13,16Z"
+          fill={animated ? 'url(#leaf-glow-dark)' : '#5d8047'}
+          animate={animated ? {
+            fill: ['#5d8047', '#34d399', '#6ee7b7', '#34d399', '#5d8047'],
+          } : undefined}
+          transition={animated ? { duration: 2, delay: 0.3, repeat: Infinity, ease: 'easeInOut' } : undefined}
+        />
+        {/* Middle accent — lighter green, brightens on hover */}
+        <motion.path
+          d="M43.85,27.16l0,0L43.82,27,43,25.47,40.69,21.3,37,24.21l-12.77,10L11.6,23.81l-3.65-3-2.24,4h0L5.55,25l-.1.19h0l-.67,1.31,0,.07h0Q3.59,29,2.66,31.42L6.5,34.56a47.8,47.8,0,0,1,2-5h0L9.27,28,24.14,40.29,39.27,28.41,40,30h0a46.27,46.27,0,0,1,2.07,5.33L46,32.18c-.61-1.7-1.32-3.37-2.11-5"
+          fill={animated ? 'url(#leaf-glow-light)' : '#98b74e'}
+          animate={animated ? {
+            fill: ['#98b74e', '#6ee7b7', '#a7f3d0', '#6ee7b7', '#98b74e'],
+          } : undefined}
+          transition={animated ? { duration: 2, delay: 0.15, repeat: Infinity, ease: 'easeInOut' } : undefined}
+        />
+      </g>
+
+      {/* Glow filter behind leaf on hover */}
+      {animated && (
+        <motion.circle
+          cx="24.3"
+          cy="41"
+          r="30"
+          fill="none"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 0.4, 0] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ filter: 'blur(12px)', fill: 'rgba(16,185,129,0.3)' }}
+        />
+      )}
+    </svg>
+  );
+}
+
+export default MonumentalLeaf;
