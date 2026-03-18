@@ -42,6 +42,7 @@ function AboutPage({ theme }: AboutPageProps) {
             Connected to
           </h2>
           <ul className={`text-[15px] leading-relaxed space-y-2 ${text}`}>
+            <li><strong className={heading}>Snowflake</strong> — sales revenue, fulfillment, micro market transactions, and historical analytics</li>
             <li><strong className={heading}>LightSpeed/LEVEL</strong> — orders, fulfillment, warehouse inventory, and par levels</li>
             <li><strong className={heading}>OOS Database</strong> — fill rates and out-of-stock tracking</li>
             <li><strong className={heading}>Salesforce</strong> — accounts, contacts, tasks, cases, opportunities</li>

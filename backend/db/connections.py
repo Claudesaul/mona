@@ -1,4 +1,4 @@
-"""Database connection functions for LightSpeed, Level, OOS, and Salesforce."""
+"""Database connection functions for LightSpeed, Level, OOS, Salesforce, and Snowflake."""
 
 import os
 import pyodbc
@@ -186,3 +186,55 @@ def execute_salesforce_query(soql_query: str) -> list[dict]:
         return cleaned
     except Exception as e:
         raise RuntimeError(f"Salesforce query error: {str(e)}") from e
+
+
+def get_snowflake_connection():
+    """Get a connection to the Snowflake SEED data warehouse."""
+    username = os.getenv("Snowflake_USERNAME")
+    password = os.getenv("Snowflake_PASSWORD")
+    if not username or not password:
+        raise ValueError("Snowflake_USERNAME and Snowflake_PASSWORD must be set in .env")
+
+    conn_str = (
+        "DRIVER={SnowflakeDSIIDriver};"
+        "SERVER=kfc56636.us-east-1.snowflakecomputing.com;"
+        "DATABASE=PRD_SEED_DW_VIEW_SHARE_V1;"
+        "WAREHOUSE=PRD_SEED_OPERATOR_WH;"
+        "SCHEMA=PUBLIC;"
+        f"UID={username};"
+        f"PWD={password};"
+    )
+    return pyodbc.connect(conn_str, timeout=60)
+
+
+def execute_snowflake_query(query: str) -> list[dict]:
+    """Execute a query against the Snowflake SEED data warehouse."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_snowflake_connection()
+        cursor = conn.cursor()
+        cursor.execute(query)
+
+        if cursor.description is None:
+            return []
+
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        return [dict(zip(columns, row)) for row in rows]
+
+    except pyodbc.Error as e:
+        raise RuntimeError(f"Snowflake query error: {str(e)}") from e
+    except Exception as e:
+        raise RuntimeError(f"Snowflake error: {str(e)}") from e
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass

@@ -98,10 +98,23 @@ function WelcomeState({
 function ChatWindow({ sessionId, theme }: ChatWindowProps) {
   const { messages, sendMessage, isLoading } = useChat(sessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUp = useRef(false);
 
+  // Only auto-scroll if user hasn't scrolled up
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!userScrolledUp.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  // Detect if user scrolled away from bottom
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    userScrolledUp.current = !atBottom;
+  };
 
   const hasMessages = messages.length > 0;
 
@@ -120,6 +133,8 @@ function ChatWindow({ sessionId, theme }: ChatWindowProps) {
           <>
             <motion.div
               key="messages"
+              ref={containerRef}
+              onScroll={handleScroll}
               className="flex-1 overflow-y-auto px-4 sm:px-6 py-6"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

@@ -1,291 +1,149 @@
-"""Database schema descriptions for Claude system prompt injection.
+"""Database schema descriptions for Claude system prompt.
 
-These descriptions help Claude understand the available tables, columns, and
-relationships so it can write accurate SQL queries.
+Compact format to minimize token usage while giving the AI enough
+context to write correct queries across 5 databases.
 """
 
 SCHEMAS = {
+    "snowflake": {
+        "name": "Snowflake (SEED Data Warehouse)",
+        "type": "Snowflake SQL",
+        "description": "PRIMARY source for revenue, sales, fulfillment, and operational analytics. All fact tables join to dimension tables via KEY columns. Date keys are integers in YYYYMMDD format.",
+        "tables": {
+            "RECOGNIZESALESREVENUEFACT_V": {
+                "description": "Revenue and sales per visit/delivery. THE table for financial questions.",
+                "columns": "LOCATIONKEY (INT FK), ITEMKEY (INT FK), ROUTEKEY (INT FK), VISITDATEKEY (INT, YYYYMMDD), VISITDATETIME (TIMESTAMP), SALETYPE (TEXT), QUANTITYSOLD (NUM), ACTUALSALESBASEPRICE (NUM), ACTUALSALESEXTENDEDPRICE (NUM), ACTUALSALESEXTENDEDTOTALREVENUE (NUM — use this for revenue), ALLOCATEDSALESEXTENDEDTOTALREVENUE (NUM), EXTENDEDCOST (NUM), ALLOCATEDSALESEXTENDEDGROSSMARGIN (NUM — gross margin), NUMBERSPOILED (NUM), EXTENDEDSPOILEDVALUE (NUM), DELIVEREDQUANTITY (NUM), EXTENDEDCOMMISSIONVALUE (NUM)",
+                "joins": ["DIMLOCATION_V ON LOCATIONKEY", "DIMITEM_V ON ITEMKEY", "DIMROUTE_V ON ROUTEKEY"],
+                "notes": ["Always filter by VISITDATEKEY (YYYYMMDD integer) or VISITDATETIME.", "Revenue = ACTUALSALESEXTENDEDTOTALREVENUE."],
+            },
+            "MICROMARKETSALESFACT_V": {
+                "description": "Individual micro market sale transactions (20M+ rows).",
+                "columns": "LOCATIONKEY (INT FK), ITEMKEY (INT FK), SALEDATEKEY (INT, YYYYMMDD), SALEDATETIME (TIMESTAMP), QUANTITY (NUM), EXTENDEDPRICE (NUM), EXTENDEDTOTALPRICE (NUM), PRODUCTCOST (NUM), DEPLETION (NUM), WASOUTOFSTOCK (TEXT), WASDEPLETED (TEXT), CURRENTINVENTORY (NUM)",
+                "joins": ["DIMLOCATION_V ON LOCATIONKEY", "DIMITEM_V ON ITEMKEY"],
+                "notes": ["Always filter by SALEDATEKEY or SALEDATETIME."],
+            },
+            "ORDERTOFULFILLMENTVENDINGMARKETFACT_V": {
+                "description": "Order-to-fulfillment tracking (31M+ rows). Orders, picks, deliveries, spoils.",
+                "columns": "LOCATIONKEY (INT FK), ITEMKEY (INT FK), TARGETDELIVERYDATEKEY (INT, YYYYMMDD), DELIVERYDATEKEY (INT), ORDERQUANTITY (NUM), PICKQUANTITY (NUM), DELIVEREDQUANTITY (NUM), SPOILQUANTITY (NUM), REMOVEQUANTITY (NUM), DEPLETIONQUANTITY (NUM), COILOOS (NUM), PAR (NUM), CAPACITY (NUM), ITEMCOST (NUM), DELIVERYDRIVERNAME (TEXT)",
+                "joins": ["DIMLOCATION_V ON LOCATIONKEY", "DIMITEM_V ON ITEMKEY"],
+                "notes": ["Always filter by TARGETDELIVERYDATEKEY or DELIVERYDATEKEY."],
+            },
+            "SALESBYCOILFACT_V": {
+                "description": "Sales metrics by coil position (47M+ rows). Daily sales averages and inventory.",
+                "columns": "LOCATIONKEY (INT FK), ITEMKEY (INT FK), EXTRACTDATEKEY (INT, YYYYMMDD), PAR (NUM), ACTUALSALESTODAYVALUE (NUM), AVERAGEDAILYSALESVALUE (NUM), ACTUALVENDPRICEVALUE (NUM — vend price), INVENTORY (NUM)",
+                "joins": ["DIMLOCATION_V ON LOCATIONKEY", "DIMITEM_V ON ITEMKEY"],
+                "notes": ["Always filter by EXTRACTDATEKEY."],
+            },
+            "DIMITEM_V": {
+                "description": "Item/product dimension (6.4K items).",
+                "columns": "ITEMKEY (INT PK), NAME (TEXT), CODE (TEXT), CATEGORY (TEXT), MANUFACTURER (TEXT), UNITCOST (NUM), SIZE (TEXT), SHELFLIFE (NUM)",
+            },
+            "DIMLOCATION_V": {
+                "description": "Location/site dimension (1.7K locations).",
+                "columns": "LOCATIONKEY (INT PK), NAME (TEXT), CODE (TEXT), CITY (TEXT), STATE (TEXT), REGION (TEXT), CHANNEL (TEXT), LOCATIONTYPE (TEXT), COMMISSIONPLANNAME (TEXT), PRICINGPLANNAME (TEXT)",
+            },
+            "DIMROUTE_V": {
+                "description": "Delivery route dimension (65 routes).",
+                "columns": "ROUTEKEY (INT PK), NAME (TEXT), CODE (TEXT), DRIVERNAME (TEXT)",
+            },
+            "WAREHOUSEINVENTORYFACT_V": {
+                "description": "Warehouse inventory snapshots (8M+ rows).",
+                "columns": "ITEMKEY (INT FK), EXTRACTDATEKEY (INT), QUANTITYONHAND (NUM), QUANTITYCOMMITTED (NUM)",
+            },
+        },
+    },
     "lightspeed": {
-        "name": "LightSpeed",
-        "type": "SQL Server",
-        "description": "Order and transaction data for Monumental Markets vending and micro-market operations.",
+        "name": "LightSpeed (SQL Server)",
+        "type": "T-SQL",
+        "description": "Order and pick status tracking. WARNING: Has NO price/cost/revenue columns. Do NOT use for financial questions — use Snowflake instead.",
         "tables": {
             "dbo.ItemView": {
-                "description": (
-                    "Primary order/transaction view (~4.7M rows). Contains all item-level order data "
-                    "including what was ordered, where, when, and fulfillment status."
-                ),
-                "columns": {
-                    "id": "INT - Unique order line item ID",
-                    "locID": "INT - Location ID",
-                    "locDescription": "NVARCHAR - Location name/description (e.g., 'Washington Hospital Center')",
-                    "machineBarcode": "NVARCHAR - Machine/asset barcode identifier",
-                    "orderDate": "DATETIME - Date the order was placed",
-                    "product": "NVARCHAR - Product name/description",
-                    "quantity": "INT - Originally ordered quantity",
-                    "updatedQuantity": "INT - Final/adjusted quantity (after modifications)",
-                    "coil": "NVARCHAR - Coil/slot position in the machine",
-                    "statusId": "INT - Order status (1=Open, 2=Processed, 3=Shipped, 4=Delivered, 5=Cancelled)",
-                    "providerName": "NVARCHAR - Supplier/provider name",
-                    "rteID": "INT - Route ID",
-                    "rteDescription": "NVARCHAR - Route name/description (e.g., 'Route 1 - Downtown')",
-                    "categoryDescription": "NVARCHAR - Product category",
-                    "upc": "NVARCHAR - Universal Product Code",
-                    "itemID": "INT - Internal item/product ID",
-                    "parLevel": "INT - Par level for the coil position",
-                    "machineDescription": "NVARCHAR - Machine/asset description",
-                    "lastDeliveryDate": "DATETIME - Date of most recent delivery",
-                    "scheduledDeliveryDate": "DATETIME - Next scheduled delivery date",
-                },
+                "description": "Order line items (~4.7M rows). Shows what was ordered, picked, and delivered. No financial data.",
+                "columns": "id (INT), locID (INT), locDescription (TEXT — location name), machineBarcode (TEXT), orderDate (DATE), product (TEXT — item name), productID (INT), quantity (INT — ordered qty), updatedQuantity (INT), cQty (INT — current qty), sQty (INT — sold qty), par (INT), capacity (INT), coil (TEXT), statusId (INT — order status), rteID (INT), rteDescription (TEXT — route name), PickDate (DATE), completedTime (DATETIME), providerName (TEXT), categoryID (INT), cusDescription (TEXT — customer name)",
                 "notes": [
-                    "This is a VIEW, not a base table. Use SELECT only.",
-                    "orderDate is the most common filter column.",
-                    "Use locDescription for location name searches.",
-                    "statusId=5 means cancelled - typically exclude these.",
-                    "updatedQuantity reflects the actual delivered quantity.",
+                    "WARNING: No price, cost, or revenue columns. Cannot answer 'how much money' questions.",
+                    "Use for: order status, what was ordered/picked, fulfillment tracking.",
+                    "Always filter by orderDate — table is huge.",
                 ],
             },
         },
     },
     "level": {
-        "name": "Level",
-        "type": "SQL Server",
-        "description": "Inventory, warehouse, and purchasing data for Monumental Markets.",
+        "name": "Level (SQL Server)",
+        "type": "T-SQL",
+        "description": "Warehouse inventory, par levels, and purchase orders.",
         "tables": {
             "dbo.AreaItemParView": {
-                "description": (
-                    "Inventory par level view showing target stock levels by area/location. "
-                    "Used for inventory management and replenishment planning."
-                ),
-                "columns": {
-                    "AreaId": "INT - Area/location ID",
-                    "AreaName": "NVARCHAR - Area/location name",
-                    "ItemId": "INT - Item ID",
-                    "ItemName": "NVARCHAR - Item/product name",
-                    "ParLevel": "INT - Target par level (desired stock quantity)",
-                    "UPC": "NVARCHAR - Universal Product Code",
-                    "CategoryName": "NVARCHAR - Product category name",
-                    "VendorName": "NVARCHAR - Vendor/supplier name",
-                },
+                "description": "Current inventory and par levels by warehouse area (~5K rows).",
+                "columns": "itemID (INT), itemName (TEXT), itemCode (TEXT), itemActive (BIT), FillTo (INT — par level), ReorderPoint (INT), SafetyStock (INT), currentQty (INT — on hand), AreaID (INT), areaName (TEXT — warehouse area), vendorName (TEXT)",
             },
             "dbo.PurchaseOrder": {
-                "description": "Purchase orders placed with vendors.",
-                "columns": {
-                    "PurchaseOrderId": "INT - Primary key",
-                    "VendorId": "INT - Vendor ID (FK to Vendor)",
-                    "OrderDate": "DATETIME - Date order was placed",
-                    "ExpectedDate": "DATETIME - Expected delivery date",
-                    "Status": "INT - Order status",
-                    "TotalAmount": "DECIMAL - Total order amount",
-                    "Notes": "NVARCHAR - Order notes",
-                },
-            },
-            "dbo.PurchaseOrderItem": {
-                "description": "Line items within purchase orders.",
-                "columns": {
-                    "PurchaseOrderItemId": "INT - Primary key",
-                    "PurchaseOrderId": "INT - FK to PurchaseOrder",
-                    "ItemId": "INT - FK to Item",
-                    "Quantity": "INT - Ordered quantity",
-                    "UnitCost": "DECIMAL - Cost per unit",
-                    "ReceivedQuantity": "INT - Actually received quantity",
-                },
+                "description": "Purchase orders (~27K rows).",
+                "columns": "ID (INT), vendorID (INT), voided (BIT), received (BIT), expectedReceiptDate (DATE)",
             },
             "dbo.Item": {
-                "description": "Master item/product catalog.",
-                "columns": {
-                    "ItemId": "INT - Primary key",
-                    "ItemName": "NVARCHAR - Product name",
-                    "UPC": "NVARCHAR - Universal Product Code",
-                    "CategoryId": "INT - FK to category",
-                    "VendorId": "INT - FK to vendor",
-                    "IsActive": "BIT - Whether item is active",
-                },
-            },
-            "dbo.ItemSize": {
-                "description": "Item size/packaging variants.",
-                "columns": {
-                    "ItemSizeId": "INT - Primary key",
-                    "ItemId": "INT - FK to Item",
-                    "SizeName": "NVARCHAR - Size description",
-                    "UPC": "NVARCHAR - UPC for this size variant",
-                },
-            },
-            "dbo.Vendor": {
-                "description": "Vendor/supplier master data.",
-                "columns": {
-                    "VendorId": "INT - Primary key",
-                    "VendorName": "NVARCHAR - Vendor company name",
-                    "ContactName": "NVARCHAR - Primary contact",
-                    "Phone": "NVARCHAR - Phone number",
-                    "Email": "NVARCHAR - Email address",
-                },
+                "description": "Product master (~7.4K items).",
+                "columns": "ID (INT), Name (TEXT), Code (TEXT), active (BIT), cost (MONEY)",
             },
         },
     },
     "oos": {
-        "name": "OOS (Out-of-Stock)",
+        "name": "OOS (PostgreSQL)",
         "type": "PostgreSQL",
-        "description": (
-            "Out-of-stock tracking database for Monumental Markets. Tracks daily stock levels, "
-            "OOS percentages, and product movement across all vending/micro-market locations."
-        ),
+        "description": "Out-of-stock tracking, fill rates, and product activity.",
         "tables": {
             "oos_details_by_date": {
-                "description": (
-                    "Main OOS tracking table (~12M rows). One row per coil position per day, "
-                    "showing stock levels and OOS status."
-                ),
-                "columns": {
-                    "location": "TEXT - Location name",
-                    "route": "TEXT - Route name/description",
-                    "asset_id": "TEXT - Machine/asset identifier",
-                    "asset_type": "TEXT - Type of asset (e.g., 'Vending', 'Micro Market')",
-                    "coil": "TEXT - Coil/slot position",
-                    "shelf": "TEXT - Shelf position",
-                    "position": "TEXT - Position on shelf",
-                    "item_category": "TEXT - Product category",
-                    "item_code": "TEXT - Product code/SKU",
-                    "item": "TEXT - Product name",
-                    "price": "NUMERIC - Item retail price",
-                    "par": "INTEGER - Par level (target stock)",
-                    "current_level": "INTEGER - Current stock level",
-                    "date": "DATE - Date of the reading",
-                },
-                "notes": [
-                    "Extremely large table. ALWAYS filter by date.",
-                    "current_level = 0 means the coil is out of stock.",
-                    "OOS percentage = COUNT(current_level=0) / COUNT(*) for a location/date.",
-                    "Use date ranges to limit results. Never query without a date filter.",
-                ],
+                "description": "Coil-level stock readings (~12M rows). One row per coil per date.",
+                "columns": "location (TEXT), route (TEXT), asset_id (TEXT), asset_type (TEXT), coil (NUM), item_category (TEXT), item_code (TEXT), item (TEXT), price (NUM — retail price), par (NUM), current_level (NUM — 0 means OOS), date (TIMESTAMP)",
+                "notes": ["ALWAYS filter by date. current_level = 0 means out of stock."],
             },
             "product_activity": {
-                "description": (
-                    "Rolling ~14-day snapshot of product movement. Shows quantities added, sold, "
-                    "shrunk, spoiled, and removed per product per location. NO date column — the "
-                    "table only contains the most recent ~14 days of activity as a whole."
-                ),
-                "columns": {
-                    "location": "TEXT - Location name",
-                    "item": "TEXT - Product name",
-                    "item_code": "TEXT - Product code/SKU",
-                    "item_category": "TEXT - Product category",
-                    "added_qty": "INTEGER - Quantity added/stocked",
-                    "sold_qty": "INTEGER - Quantity sold",
-                    "shrink_qty": "INTEGER - Quantity lost to shrinkage",
-                    "spoiled_qty": "INTEGER - Quantity spoiled/expired",
-                    "removed_qty": "INTEGER - Quantity removed",
-                    "market_price": "NUMERIC - Retail price",
-                },
+                "description": "Rolling ~14-day product movement snapshot. Spoilage, shrinkage, sales velocity.",
+                "columns": "location (TEXT), item (TEXT), item_code (TEXT), item_category (TEXT), added_qty (INT), sold_qty (INT), shrink_qty (INT), shrink_cost (NUM), spoiled_qty (INT), spoiled_cost (NUM), removed_qty (INT), market_price (NUM), commission_price (NUM), market_pricing_type (TEXT)",
                 "notes": [
-                    "NO date column. Do NOT try to filter by date. The entire table is recent data (~14 days).",
-                    "Use for sales velocity, shrinkage analysis, and identifying slow/fast movers.",
+                    "NO date column. Do NOT filter by date. Entire table = last ~14 days.",
+                    "Sell-through % = 100.0 * sold_qty / NULLIF(added_qty, 0)",
+                    "Use for: spoilage rankings, shrinkage analysis, slow/fast movers.",
                 ],
             },
             "v_daily_oos": {
-                "description": "View: Daily OOS summary by location with OOS percentage.",
-                "columns": {
-                    "location": "TEXT - Location name",
-                    "route": "TEXT - Route name",
-                    "date": "DATE - Date",
-                    "total_coils": "BIGINT - Total coil positions",
-                    "oos_coils": "BIGINT - Number of empty coils",
-                    "oos_percentage": "NUMERIC - OOS rate as percentage",
-                },
+                "description": "Daily OOS summary by location.",
+                "columns": "location (TEXT), route (TEXT), date (DATE), total_coils (INT), oos_coils (INT), oos_percentage (NUM)",
             },
             "v_weekly_oos": {
-                "description": "View: Weekly OOS summary by location.",
-                "columns": {
-                    "location": "TEXT - Location name",
-                    "route": "TEXT - Route name",
-                    "week_start": "DATE - Start of the week",
-                    "avg_oos_percentage": "NUMERIC - Average OOS rate for the week",
-                },
+                "description": "Weekly OOS summary by location.",
+                "columns": "location (TEXT), route (TEXT), week_start (DATE), avg_oos_percentage (NUM)",
             },
             "v_daily_oos_details": {
-                "description": "View: Detailed daily OOS at the coil level (items that are out of stock).",
-                "columns": {
-                    "location": "TEXT - Location name",
-                    "route": "TEXT - Route name",
-                    "asset_id": "TEXT - Machine/asset identifier",
-                    "coil": "TEXT - Coil position",
-                    "item": "TEXT - Product name that should be in this coil",
-                    "par": "INTEGER - Target stock level",
-                    "date": "DATE - Date",
-                },
+                "description": "Coil-level OOS details (items that are out of stock).",
+                "columns": "location (TEXT), route (TEXT), asset_id (TEXT), coil (TEXT), item (TEXT), par (INT), date (DATE)",
             },
         },
     },
     "salesforce": {
         "name": "Salesforce",
         "type": "SOQL",
-        "description": "CRM data — customer accounts, contacts, tasks, events, cases, opportunities, leads.",
+        "description": "CRM — accounts, contacts, tasks, cases, opportunities.",
         "tables": {
             "Account": {
-                "description": "Customer accounts (~2K records). Each account represents a customer location or company.",
-                "columns": {
-                    "Id": "ID - Unique account ID",
-                    "Name": "STRING - Account/company name",
-                    "Type": "PICKLIST - Account type",
-                    "BillingCity": "STRING - City",
-                    "BillingState": "STRING - State",
-                    "Industry": "PICKLIST - Industry type",
-                    "OwnerId": "REFERENCE - Account owner (user ID)",
-                    "CreatedDate": "DATETIME - When account was created",
-                    "LastModifiedDate": "DATETIME - Last updated",
-                },
+                "description": "Customer accounts (~2K).",
+                "columns": "Id, Name, Type, BillingCity, BillingState, Industry, OwnerId, CreatedDate",
             },
             "Contact": {
-                "description": "People associated with accounts (~5K records).",
-                "columns": {
-                    "Id": "ID - Unique contact ID",
-                    "Name": "STRING - Full name",
-                    "Email": "STRING - Email address",
-                    "Phone": "STRING - Phone number",
-                    "Title": "STRING - Job title",
-                    "AccountId": "REFERENCE - Parent account ID",
-                },
-                "notes": ["Use Account.Name to get the account name in queries."],
+                "description": "People at accounts (~5K).",
+                "columns": "Id, Name, Email, Phone, Title, AccountId (FK → Account)",
             },
             "Task": {
-                "description": "Tasks and activities (~12K records).",
-                "columns": {
-                    "Id": "ID - Unique task ID",
-                    "Subject": "STRING - Task subject/title",
-                    "Status": "PICKLIST - Status (e.g., Completed, Not Started)",
-                    "Priority": "PICKLIST - Priority level",
-                    "ActivityDate": "DATE - Due date",
-                    "Description": "TEXT - Task details",
-                    "AccountId": "REFERENCE - Related account",
-                    "OwnerId": "REFERENCE - Assigned user",
-                    "IsClosed": "BOOLEAN - Whether task is complete",
-                    "CreatedDate": "DATETIME - When created",
-                },
+                "description": "Tasks/activities (~12K).",
+                "columns": "Id, Subject, Status, Priority, ActivityDate, Description, AccountId, OwnerId, IsClosed",
             },
             "Case": {
-                "description": "Support cases and issues (~43K records).",
-                "columns": {
-                    "Id": "ID - Unique case ID",
-                    "Subject": "STRING - Case subject",
-                    "Status": "PICKLIST - Status",
-                    "Priority": "PICKLIST - Priority",
-                    "AccountId": "REFERENCE - Related account",
-                    "ContactId": "REFERENCE - Related contact",
-                    "CreatedDate": "DATETIME - When opened",
-                    "ClosedDate": "DATETIME - When resolved",
-                },
+                "description": "Support cases (~44K).",
+                "columns": "Id, Subject, Status, Priority, AccountId, ContactId, CreatedDate, ClosedDate",
             },
             "Opportunity": {
-                "description": "Sales opportunities (~4K records).",
-                "columns": {
-                    "Id": "ID - Unique opportunity ID",
-                    "Name": "STRING - Opportunity name",
-                    "StageName": "PICKLIST - Sales stage",
-                    "Amount": "CURRENCY - Deal amount",
-                    "CloseDate": "DATE - Expected close date",
-                    "AccountId": "REFERENCE - Related account",
-                    "OwnerId": "REFERENCE - Opportunity owner",
-                },
+                "description": "Sales opportunities (~4K).",
+                "columns": "Id, Name, StageName, Amount, CloseDate, AccountId, OwnerId",
             },
         },
     },
@@ -293,23 +151,22 @@ SCHEMAS = {
 
 
 def get_schema_description() -> str:
-    """Generate a formatted schema description string for the Claude system prompt."""
+    """Generate compact schema description for the system prompt."""
     lines = []
 
-    for db_key, db_info in SCHEMAS.items():
-        lines.append(f"\n### {db_info['name']} Database ({db_info['type']})")
+    for db_info in SCHEMAS.values():
+        lines.append(f"\n### {db_info['name']} ({db_info['type']})")
         lines.append(db_info["description"])
 
-        for table_name, table_info in db_info["tables"].items():
-            lines.append(f"\n**{table_name}**: {table_info['description']}")
-            lines.append("Columns:")
+        for table_name, t in db_info["tables"].items():
+            lines.append(f"\n**{table_name}**: {t['description']}")
+            lines.append(f"  Columns: {t['columns']}")
 
-            for col_name, col_desc in table_info["columns"].items():
-                lines.append(f"  - {col_name}: {col_desc}")
+            if "joins" in t:
+                lines.append(f"  Joins: {', '.join(t['joins'])}")
 
-            if "notes" in table_info:
-                lines.append("Notes:")
-                for note in table_info["notes"]:
+            if "notes" in t:
+                for note in t["notes"]:
                     lines.append(f"  * {note}")
 
     return "\n".join(lines)

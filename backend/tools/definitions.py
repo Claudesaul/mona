@@ -1,18 +1,14 @@
-"""Tool definitions for Claude API tool_use format.
-
-These tools allow Claude to query Monumental Markets business databases
-to answer user questions about orders, inventory, and out-of-stock data.
-"""
+"""Tool definitions for Claude API tool_use."""
 
 TOOLS = [
     {
-        "name": "query_lightspeed",
+        "name": "query_snowflake",
         "description": (
-            "Query the LightSpeed SQL Server database for order and transaction data. "
-            "This database contains item-level order data from Monumental Markets vending "
-            "and micro-market operations. The primary view is dbo.ItemView with ~4.7M rows. "
-            "Use T-SQL syntax. Always include TOP to limit results. "
-            "Common filters: orderDate, locDescription, rteDescription, statusId."
+            "Query the Snowflake SEED data warehouse. THIS IS THE PRIMARY DATABASE for: "
+            "revenue, sales dollars, prices, fulfillment, delivery, spoilage value, margins. "
+            "Contains 47M+ sales rows, 31M+ fulfillment rows, 20M+ micro market transactions. "
+            "Fact tables join to dimension tables via KEY columns (LOCATIONKEY, ITEMKEY, ROUTEKEY). "
+            "Date keys are YYYYMMDD integers (e.g., 20260318). Use Snowflake SQL. Always LIMIT results."
         ),
         "input_schema": {
             "type": "object",
@@ -20,11 +16,29 @@ TOOLS = [
                 "sql_query": {
                     "type": "string",
                     "description": (
-                        "A read-only T-SQL SELECT query to run against the LightSpeed database. "
-                        "Must be a SELECT statement. Include TOP 500 or less to limit results. "
-                        "Example: SELECT TOP 100 locDescription, product, quantity, orderDate "
-                        "FROM dbo.ItemView WHERE orderDate >= '2026-03-01'"
+                        "Snowflake SQL SELECT query. Always join fact→dim for readable names. "
+                        "Always filter by date key. Always include LIMIT 500 or less."
                     ),
+                },
+            },
+            "required": ["sql_query"],
+        },
+    },
+    {
+        "name": "query_lightspeed",
+        "description": (
+            "Query LightSpeed SQL Server for order and pick status. "
+            "Shows what was ordered, when, pick/delivery status. "
+            "PRIMARY TABLE: dbo.ItemView (~4.7M rows). "
+            "WARNING: No price/cost/revenue columns — use Snowflake for financial questions. "
+            "Use T-SQL. Always include TOP and filter by orderDate."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sql_query": {
+                    "type": "string",
+                    "description": "T-SQL SELECT with TOP 500 or less. Filter by orderDate.",
                 },
             },
             "required": ["sql_query"],
@@ -33,21 +47,15 @@ TOOLS = [
     {
         "name": "query_level",
         "description": (
-            "Query the Level SQL Server database for inventory, warehouse, and purchasing data. "
-            "Contains par levels (dbo.AreaItemParView), purchase orders, items, and vendors. "
-            "Use T-SQL syntax. Always include TOP to limit results."
+            "Query Level SQL Server for warehouse inventory, par levels, purchase orders, and vendors. "
+            "Key view: dbo.AreaItemParView (current stock and pars). Use T-SQL. Always include TOP."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "sql_query": {
                     "type": "string",
-                    "description": (
-                        "A read-only T-SQL SELECT query to run against the Level database. "
-                        "Must be a SELECT statement. Include TOP 500 or less to limit results. "
-                        "Example: SELECT TOP 100 AreaName, ItemName, ParLevel "
-                        "FROM dbo.AreaItemParView WHERE CategoryName = 'Snacks'"
-                    ),
+                    "description": "T-SQL SELECT with TOP 500 or less.",
                 },
             },
             "required": ["sql_query"],
@@ -56,12 +64,10 @@ TOOLS = [
     {
         "name": "query_oos",
         "description": (
-            "Query the PostgreSQL OOS (Out-of-Stock) database for stock level and product activity data. "
-            "Main table: oos_details_by_date (~12M rows) - ALWAYS filter by date. "
-            "Also: product_activity (sales/shrinkage), v_daily_oos (daily OOS %), "
-            "v_weekly_oos (weekly OOS %), v_daily_oos_details (coil-level OOS). "
-            "Use PostgreSQL syntax. Always include LIMIT to cap results. "
-            "CRITICAL: Always include a WHERE date filter on large tables."
+            "Query PostgreSQL OOS database for fill rates, out-of-stock data, and product activity. "
+            "oos_details_by_date: coil-level stock readings (12M rows, MUST filter by date). "
+            "product_activity: rolling 14-day movement data (NO date column, do NOT filter by date). "
+            "v_daily_oos: daily OOS % by location. Use PostgreSQL syntax. Always LIMIT."
         ),
         "input_schema": {
             "type": "object",
@@ -69,11 +75,9 @@ TOOLS = [
                 "sql_query": {
                     "type": "string",
                     "description": (
-                        "A read-only PostgreSQL SELECT query to run against the OOS database. "
-                        "Must be a SELECT statement. Include LIMIT 500 or less. "
-                        "ALWAYS include a date filter on oos_details_by_date and product_activity. "
-                        "Example: SELECT location, oos_percentage, date FROM v_daily_oos "
-                        "WHERE date = '2026-03-17' ORDER BY oos_percentage DESC LIMIT 20"
+                        "PostgreSQL SELECT with LIMIT 500 or less. "
+                        "MUST filter oos_details_by_date by date. "
+                        "product_activity has NO date column — query it without date filters."
                     ),
                 },
             },
@@ -83,25 +87,15 @@ TOOLS = [
     {
         "name": "query_salesforce",
         "description": (
-            "Query Salesforce CRM data using SOQL (Salesforce Object Query Language). "
-            "Contains customer accounts (2K+), contacts (5K+), tasks (12K+), events (19K+), "
-            "cases (43K+), opportunities (3K+), and leads (13K+). "
-            "Use SOQL syntax (similar to SQL). Key objects: Account, Contact, Task, Event, Case, Opportunity, Lead. "
-            "Common Account fields: Name, Type, BillingCity, BillingState, Industry, OwnerId, CreatedDate. "
-            "Common Task fields: Subject, Status, Priority, ActivityDate, Description, AccountId, OwnerId. "
-            "Common Contact fields: Name, Email, Phone, AccountId, Title. "
-            "Use relationships: e.g. Account.Name from Contact, or What.Name from Task."
+            "Query Salesforce CRM for customer accounts, contacts, tasks, events, cases, opportunities. "
+            "Use SOQL syntax. Always include LIMIT 200 or less."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "soql_query": {
                     "type": "string",
-                    "description": (
-                        "A read-only SOQL SELECT query to run against Salesforce. "
-                        "Must be a SELECT statement. Include LIMIT 200 or less. "
-                        "Example: SELECT Name, Type, BillingCity FROM Account WHERE Type = 'Customer' LIMIT 50"
-                    ),
+                    "description": "SOQL SELECT with LIMIT 200 or less.",
                 },
             },
             "required": ["soql_query"],
