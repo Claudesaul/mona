@@ -41,7 +41,7 @@ def get_or_create_session(session_id: str) -> ChatManager:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    print("\n  Mona is running at http://0.0.0.0:3000\n")
+    print("\n  Mona is running at http://0.0.0.0:8081\n")
     yield
     sessions.clear()
 
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=3000,
+        port=8081,
         reload=True,
         reload_dirs=[str(Path(__file__).parent)],
     )
