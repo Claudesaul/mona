@@ -110,10 +110,12 @@ export function useChat(sessionId: string): UseChatReturn {
         wsRef.current = ws;
 
         let opened = false;
+        let usingFallback = false;
 
         // Clear fallback timeout once WS is working
         const fallbackTimer = setTimeout(() => {
           if (ws.readyState === WebSocket.CONNECTING) {
+            usingFallback = true;
             ws.close();
             fallbackFetch(text.trim(), assistantId);
           }
@@ -202,7 +204,8 @@ export function useChat(sessionId: string): UseChatReturn {
 
         ws.onerror = () => {
           clearTimeout(fallbackTimer);
-          if (!opened) {
+          if (!opened && !usingFallback) {
+            usingFallback = true;
             fallbackFetch(text.trim(), assistantId);
           }
         };
@@ -210,7 +213,8 @@ export function useChat(sessionId: string): UseChatReturn {
         ws.onclose = (event) => {
           wsRef.current = null;
           clearTimeout(fallbackTimer);
-          if (!event.wasClean && isLoadingRef.current) {
+          // Don't kill streaming state if we're using HTTP fallback
+          if (!event.wasClean && isLoadingRef.current && !usingFallback) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantIdRef.current && m.isStreaming

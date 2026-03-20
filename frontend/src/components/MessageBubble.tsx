@@ -79,6 +79,29 @@ function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls, 
           }
         `}
       >
+        {/* Open in Excel button — above the table content */}
+        {csvData && (
+          <button
+            onClick={handleExcelExport}
+            className={`
+              mb-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium
+              transition-colors duration-150 cursor-pointer border
+              ${isDark
+                ? 'text-white/50 hover:text-white/80 border-white/[0.1] hover:bg-white/[0.06]'
+                : 'text-gray-500 hover:text-gray-700 border-gray-200 hover:bg-gray-50'
+              }
+            `}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="8" y1="13" x2="16" y2="13" />
+              <line x1="8" y1="17" x2="16" y2="17" />
+            </svg>
+            Open in Excel
+          </button>
+        )}
+
         <div className={isUser ? '' : 'prose-mona'}>
           {content ? (
             isUser ? (
@@ -133,28 +156,6 @@ function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls, 
           <QueryDetails toolCalls={toolCalls} theme={theme} />
         )}
 
-        {/* Open in Excel button for tabular data */}
-        {csvData && (
-          <button
-            onClick={handleExcelExport}
-            className={`
-              mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium
-              transition-colors duration-150 cursor-pointer border
-              ${isDark
-                ? 'text-white/50 hover:text-white/80 border-white/[0.1] hover:bg-white/[0.06]'
-                : 'text-gray-500 hover:text-gray-700 border-gray-200 hover:bg-gray-50'
-              }
-            `}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="8" y1="13" x2="16" y2="13" />
-              <line x1="8" y1="17" x2="16" y2="17" />
-            </svg>
-            Open in Excel
-          </button>
-        )}
       </div>
     </motion.div>
   );
