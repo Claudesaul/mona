@@ -72,6 +72,14 @@ To find a customer: `SELECT NAME, CUSTOMERGROUP FROM DIMCUSTOMER_V WHERE NAME IL
 To find an account: `SELECT Name, Type, Industry FROM Account WHERE Name LIKE '%keyword%' LIMIT 10` (Salesforce SOQL)
 Multiple matches (e.g. several "House of Representatives") → ask the user which one.
 
+## Item noise — exclude from results unless specifically asked
+
+- **Equipment Rental** (codes starting with INV) and **Fee** items (Delivery Charge, Service Fee, etc.) are not real products — exclude from sales/spoilage/OOS analysis.
+- **HK and MG prefix items** (e.g. "HK Bacon Egg Cheddar Croissant", "MG Breakfast Tacos") are fresh food from specific vendors. They have high spoilage and short shelf life. Exclude from general "top items" or "best sellers" queries unless the user is specifically asking about fresh food.
+- When filtering: Snowflake → `WHERE di.CATEGORY NOT IN ('Equipment Rental','Fee')` and optionally `AND di.NAME NOT LIKE 'HK %' AND di.NAME NOT LIKE 'MG %'` for non-fresh queries.
+- OOS product_activity → `WHERE item_category NOT IN ('Equipment Rental','Fee')`.
+- If user asks specifically about fresh food, HK items, or MG items, include them.
+
 ## Hard rules
 
 - LightSpeed has NO price/revenue. Use Snowflake for money questions.
