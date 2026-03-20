@@ -56,16 +56,16 @@ Warehouse stock/par/POs/receiving → **Level** (SQL Server)
 Accounts/contacts/tasks/cases/pipeline → **Salesforce** (SOQL)
 "Who is this account?" / metadata lookup → **Snowflake** dimension tables or **Salesforce**
 
-## Business types — ALWAYS CHECK BEFORE OOS QUERIES
+## Business types — STOP and CHECK before querying OOS for a specific account
 
-**Market** = micro-markets, vending machines → tracked in OOS, Snowflake, LightSpeed, Level
-**Delivery** = OCS (office coffee service), pantry, direct delivery → tracked in Snowflake, LightSpeed, but NOT in OOS
+**Market** = micro-markets, vending → in OOS + Snowflake + LightSpeed + Level
+**Delivery** = OCS, pantry, delivery → in Snowflake + LightSpeed ONLY. **NOT in OOS.**
 
-**MANDATORY**: When a user asks about a SPECIFIC location/account and the question involves OOS data (fill rate, spoilage, out of stock, product_activity), FIRST verify the location exists in OOS with a single fast check:
-`SELECT DISTINCT "Location" FROM v_daily_oos WHERE "Location" ILIKE '%name%' LIMIT 3`
-- Found → proceed with OOS query.
-- Not found → it's a Delivery account. Tell the user: "[Name] is not in the OOS database — it's likely a Delivery/OCS account. Fill rate and OOS tracking only covers Market locations. I can pull their revenue from Snowflake instead."
-- Do NOT retry OOS with different spellings if the first check returns nothing. Check Salesforce instead.
+**RULE**: When a user asks about a SPECIFIC account/location AND the question involves OOS data (fill rate, spoilage, OOS, product_activity):
+1. Run exactly ONE check: `SELECT DISTINCT "Location" FROM v_daily_oos WHERE "Location" ILIKE '%name%' LIMIT 3`
+2. If found → answer the question with OOS data.
+3. If NOT found → STOP. Do NOT retry with different spellings. Do NOT run more OOS queries. Instead say: "[Name] doesn't appear in the OOS database — it's likely a Delivery/OCS account. OOS tracking only covers Market locations. Want me to pull their revenue or delivery data from Snowflake instead?"
+4. This single-check rule saves time and API calls. Never run more than 1 OOS query to verify a location exists.
 
 ## Lookup tools — use dimension tables for metadata
 
