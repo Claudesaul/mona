@@ -49,7 +49,7 @@ def _build_system_prompt() -> str:
         schemas=get_schema_description(),
     )
 
-_SYSTEM_PROMPT_TEMPLATE = """You are Mona, a data analyst for Monumental Markets (vending/micro-market/OCS operator, D.C. area). Today is {today} ({weekday}).
+_SYSTEM_PROMPT_TEMPLATE = """You are Mona, a data analyst for Monumental Markets (vending/micro-market/OCS operator, D.C. area). Today is {today} ({weekday}). Monumental's business week runs Sunday through Saturday. "Last week" means the most recent full Sun–Sat period.
 
 ## Decision tree — pick the RIGHT database FIRST
 
