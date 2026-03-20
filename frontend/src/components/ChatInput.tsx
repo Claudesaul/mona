@@ -1,22 +1,22 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUp } from 'lucide-react';
 import type { Theme } from '@/hooks/useTheme';
 
 interface ChatInputProps {
+  value: string;
+  onChange: (value: string) => void;
   onSend: (message: string) => void;
   isLoading: boolean;
   centered?: boolean;
   theme?: Theme;
 }
 
-function ChatInput({ onSend, isLoading, centered = false, theme = 'dark' }: ChatInputProps) {
-  const [input, setInput] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
+function ChatInput({ value, onChange, onSend, isLoading, centered = false, theme = 'dark' }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isDark = theme === 'dark';
 
-  const canSend = input.trim().length > 0 && !isLoading;
+  const canSend = value.trim().length > 0 && !isLoading;
 
   const adjustHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -26,14 +26,14 @@ function ChatInput({ onSend, isLoading, centered = false, theme = 'dark' }: Chat
     }
   }, [centered]);
 
-  useEffect(() => { adjustHeight(); }, [input, adjustHeight]);
+  useEffect(() => { adjustHeight(); }, [value, adjustHeight]);
 
   const handleSend = useCallback(() => {
     if (!canSend) return;
-    onSend(input.trim());
-    setInput('');
+    onSend(value.trim());
+    onChange('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-  }, [canSend, input, onSend]);
+  }, [canSend, value, onSend, onChange]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -52,10 +52,10 @@ function ChatInput({ onSend, isLoading, centered = false, theme = 'dark' }: Chat
           ${centered ? 'rounded-2xl' : 'rounded-xl'}
           border
           ${isDark
-            ? isFocused
+            ? value
               ? 'bg-[#111113] border-white/[0.12] shadow-[0_0_0_1px_rgba(16,185,129,0.05),0_8px_50px_rgba(0,0,0,0.5)]'
               : 'bg-[#111113] border-white/[0.07] shadow-[0_4px_30px_rgba(0,0,0,0.35)]'
-            : isFocused
+            : value
               ? 'bg-white border-gray-300/80 shadow-[0_0_0_1px_rgba(16,185,129,0.06),0_8px_40px_rgba(0,0,0,0.08)]'
               : 'bg-white border-gray-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.05)]'
           }
@@ -65,11 +65,9 @@ function ChatInput({ onSend, isLoading, centered = false, theme = 'dark' }: Chat
         <div className={centered ? 'px-5 pt-5 pb-3' : 'px-4 pt-4 pb-2'}>
           <textarea
             ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
             placeholder="Ask anything..."
             rows={centered ? 2 : 1}
             className={`

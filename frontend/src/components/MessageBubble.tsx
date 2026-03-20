@@ -1,16 +1,21 @@
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import QueryDetails from './QueryDetails';
+import type { ToolCall } from '@/hooks/useChat';
 import type { Theme } from '@/hooks/useTheme';
+
+const REMARK_PLUGINS = [remarkGfm];
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
   content: string;
   isStreaming: boolean;
   theme?: Theme;
+  toolCalls?: ToolCall[];
 }
 
-function MessageBubble({ role, content, isStreaming, theme = 'dark' }: MessageBubbleProps) {
+function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls }: MessageBubbleProps) {
   const isUser = role === 'user';
   const isDark = theme === 'dark';
 
@@ -39,7 +44,7 @@ function MessageBubble({ role, content, isStreaming, theme = 'dark' }: MessageBu
             isUser ? (
               <span>{content}</span>
             ) : (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{content}</ReactMarkdown>
             )
           ) : isStreaming ? (
             <div className="flex items-center gap-1.5 py-1">
@@ -63,6 +68,11 @@ function MessageBubble({ role, content, isStreaming, theme = 'dark' }: MessageBu
             animate={{ opacity: [1, 0.2, 1] }}
             transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
           />
+        )}
+
+        {/* Query transparency: show which databases/queries were used */}
+        {!isUser && !isStreaming && toolCalls && toolCalls.length > 0 && (
+          <QueryDetails toolCalls={toolCalls} theme={theme} />
         )}
       </div>
     </motion.div>

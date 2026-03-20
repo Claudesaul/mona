@@ -25,6 +25,7 @@ from db.connections import (
 from db.schemas import get_schema_description
 from tools.definitions import TOOLS
 import cache
+from location_cache import get_location_context
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,17 @@ MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 4096
 MAX_TOOL_ROUNDS = 10  # Prevent infinite tool loops
 
-SYSTEM_PROMPT = f"""You are Mona, a data assistant for Monumental Markets (vending/micro-market operator, D.C. area). You query databases to answer business questions. Today is {datetime.now().strftime('%Y-%m-%d')} ({datetime.now().strftime('%A')}).
+def _build_system_prompt() -> str:
+    """Build the system prompt with current date and cached location names."""
+    now = datetime.now()
+    return _SYSTEM_PROMPT_TEMPLATE.format(
+        today=now.strftime('%Y-%m-%d'),
+        weekday=now.strftime('%A'),
+        schemas=get_schema_description(),
+        location_context=get_location_context(),
+    )
+
+_SYSTEM_PROMPT_TEMPLATE = """You are Mona, a data assistant for Monumental Markets (vending/micro-market operator, D.C. area). You query databases to answer business questions. Today is {today} ({weekday}).
 
 ## Which database to use
 
@@ -194,7 +205,8 @@ When the user says → use this:
 **Important context:** Snowflake data syncs from Seed at midnight daily — for "today" questions, data may only be current through yesterday. OOS PostgreSQL data is also refreshed daily by Monumator automation.
 
 ## Schemas
-{get_schema_description()}
+{schemas}
+{location_context}
 
 ## Response style
 
@@ -331,19 +343,23 @@ class ChatManager:
         """Return conversation history for this session."""
         return self.history
 
-    async def send_message(self, user_message: str) -> AsyncGenerator[str, None]:
-        """Send a message and yield streaming text chunks.
+    async def send_message(self, user_message: str) -> AsyncGenerator[dict, None]:
+        """Send a message and yield streaming event dicts.
 
         Handles the tool_use loop: when Claude requests a tool, execute it,
         feed the result back, and continue until Claude gives a final text response.
 
         Yields:
-            str: Text chunks from Claude's streaming response.
+            dict: Event dicts with "type" key:
+                - {"type": "chunk", "content": "text"}
+                - {"type": "tool_use", "database": "Snowflake", "query": "SELECT ..."}
+                - {"type": "status", "content": "Querying Snowflake database..."}
         """
         # Add user message to history
         self.history.append({"role": "user", "content": user_message})
 
         messages = self._build_messages()
+        system_prompt = _build_system_prompt()
         tool_round = 0
 
         while tool_round < MAX_TOOL_ROUNDS:
@@ -357,7 +373,7 @@ class ChatManager:
                 with self.client.messages.stream(
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
-                    system=SYSTEM_PROMPT,
+                    system=system_prompt,
                     messages=messages,
                     tools=TOOLS,
                 ) as stream:
@@ -375,7 +391,7 @@ class ChatManager:
                                 chunk = event.delta.text
                                 current_text += chunk
                                 text_chunks.append(chunk)
-                                yield chunk
+                                yield {"type": "chunk", "content": chunk}
 
                     # Get the final message to check for tool use
                     final_message = stream.get_final_message()
@@ -383,7 +399,7 @@ class ChatManager:
 
             except anthropic.APIError as e:
                 error_msg = f"\n\nI encountered an API error: {str(e)}. Please try again."
-                yield error_msg
+                yield {"type": "chunk", "content": error_msg}
                 self.history.append({"role": "assistant", "content": error_msg})
                 return
 
@@ -429,8 +445,12 @@ class ChatManager:
                     "query_snowflake": "Snowflake",
                 }.get(block.name, block.name)
 
-                status_msg = f"\n\n*Querying {db_label} database...*\n\n"
-                yield status_msg
+                # Send status event
+                yield {"type": "status", "content": f"Querying {db_label} database..."}
+
+                # Send tool_use metadata so frontend can show query details
+                query_text = block.input.get("sql_query") or block.input.get("soql_query") or ""
+                yield {"type": "tool_use", "database": db_label, "query": query_text}
 
                 # Execute the tool
                 result_str = _execute_tool(block.name, block.input)
@@ -449,7 +469,7 @@ class ChatManager:
             text_chunks = []
 
         # If we exhausted tool rounds, add a note
-        yield "\n\nI've reached the maximum number of database queries for this turn. Please try a more specific question."
+        yield {"type": "chunk", "content": "\n\nI've reached the maximum number of database queries for this turn. Please try a more specific question."}
         self.history.append({
             "role": "assistant",
             "content": "I've reached the maximum number of database queries for this turn.",

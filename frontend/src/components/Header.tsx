@@ -3,12 +3,13 @@ import { motion } from 'framer-motion';
 import MonumentalLeaf from './MonumentalLeaf';
 import ThemeToggle from './ThemeToggle';
 import type { Theme } from '@/hooks/useTheme';
+import type { Page } from '@/App';
 
 interface HeaderProps {
   theme: Theme;
   toggleTheme: () => void;
-  page: 'chat' | 'about';
-  onNavigate: (page: 'chat' | 'about') => void;
+  page: Page;
+  onNavigate: (page: Page) => void;
 }
 
 function Header({ theme, toggleTheme, page, onNavigate }: HeaderProps) {
@@ -44,7 +45,7 @@ function Header({ theme, toggleTheme, page, onNavigate }: HeaderProps) {
 
         {/* Center: Nav links */}
         <nav className="flex items-center gap-1">
-          {(['chat', 'about'] as const).map((p) => (
+          {(['chat', 'explore', 'about'] as const).map((p) => (
             <button
               key={p}
               onClick={() => onNavigate(p)}

@@ -1,33 +1,80 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/useChat';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
-import MonumentalLeaf from './MonumentalLeaf';
 import type { Theme } from '@/hooks/useTheme';
 
 interface ChatWindowProps {
   sessionId: string;
   theme: Theme;
+  pendingQuestion?: string;
+  onPendingConsumed?: () => void;
 }
 
-const suggestions = [
-  'What locations had the worst fill rate?',
-  'Show me today\'s order summary',
-  'Which items are trending out of stock?',
-  'Warehouse inventory status',
+// Pool of suggestion questions organized by source — real location/account names
+// will be injected dynamically when fetched from /api/locations
+const SUGGESTION_POOL = [
+  // Snowflake — Revenue & Sales
+  'What was total revenue last week?',
+  'Top 10 locations by revenue this month',
+  'Revenue by product category this week',
+  'Which routes generated the most revenue yesterday?',
+  'Show me gross margin by location this month',
+  // LightSpeed — Orders & Picking
+  "What's today's order status breakdown?",
+  'How many orders are currently being picked?',
+  'Which routes have the most orders today?',
+  'Average pick time by route today',
+  // OOS — Fill Rate & Stock Health
+  'Which locations have the worst fill rate?',
+  'Top spoilage items in the last 14 days',
+  'What items have the highest shrinkage?',
+  'Show me weekly OOS trends',
+  'Which locations are predicted to have stock shortages?',
+  'What are the fastest selling items right now?',
+  // Level — Warehouse
+  'What items are below reorder point?',
+  'Show me current warehouse inventory levels',
+  'Recent purchase orders this week',
+  'Which items have the lowest days of supply?',
+  // Salesforce — CRM
+  'How many open tasks are there by account?',
+  'Show me the sales pipeline',
+  'Recent equipment installs this month',
+  'How many customer vs prospect accounts do we have?',
 ];
+
+// Templates that get real names injected
+const LOCATION_TEMPLATES = [
+  'How much revenue did {location} make this month?',
+  "What's the fill rate at {location}?",
+  'Show me orders for {location} today',
+  'What items are out of stock at {location}?',
+  'Spoilage report for {location}',
+];
+
+function pickRandom<T>(arr: T[], count: number): T[] {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
 
 function WelcomeState({
   onSuggestionClick,
+  inputValue,
+  onInputChange,
   onSend,
   isLoading,
   theme,
+  suggestions,
 }: {
   onSuggestionClick: (text: string) => void;
+  inputValue: string;
+  onInputChange: (value: string) => void;
   onSend: (text: string) => void;
   isLoading: boolean;
   theme: Theme;
+  suggestions: string[];
 }) {
   const isDark = theme === 'dark';
 
@@ -60,10 +107,17 @@ function WelcomeState({
         transition={{ duration: 0.6, delay: 0.45, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-[640px] mb-6"
       >
-        <ChatInput onSend={onSend} isLoading={isLoading} centered theme={theme} />
+        <ChatInput
+          value={inputValue}
+          onChange={onInputChange}
+          onSend={onSend}
+          isLoading={isLoading}
+          centered
+          theme={theme}
+        />
       </motion.div>
 
-      {/* Suggestion pills — invert colors on hover */}
+      {/* Suggestion pills — click pastes into input, doesn't send */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -72,7 +126,7 @@ function WelcomeState({
       >
         {suggestions.map((s, i) => (
           <motion.button
-            key={i}
+            key={s}
             onClick={() => onSuggestionClick(s)}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -95,11 +149,39 @@ function WelcomeState({
   );
 }
 
-function ChatWindow({ sessionId, theme }: ChatWindowProps) {
+function ChatWindow({ sessionId, theme, pendingQuestion, onPendingConsumed }: ChatWindowProps) {
   const { messages, sendMessage, isLoading } = useChat(sessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const userScrolledUp = useRef(false);
+  const [inputValue, setInputValue] = useState('');
+
+  const [suggestions, setSuggestions] = useState(() => pickRandom(SUGGESTION_POOL, 5));
+
+  // Handle pending question from Explore page
+  useEffect(() => {
+    if (pendingQuestion) {
+      setInputValue(pendingQuestion);
+      onPendingConsumed?.();
+    }
+  }, [pendingQuestion, onPendingConsumed]);
+
+  // Fetch real location names and mix location-specific suggestions in
+  useEffect(() => {
+    fetch('/api/locations')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.locations && data.locations.length > 0) {
+          const locs = pickRandom(data.locations as string[], 3);
+          const dynamic = pickRandom(LOCATION_TEMPLATES, 2).map((tpl, i) =>
+            tpl.replace('{location}', locs[i % locs.length])
+          );
+          // Replace last 2 generic suggestions with location-specific ones
+          setSuggestions((prev) => [...prev.slice(0, 3), ...dynamic]);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Only auto-scroll if user hasn't scrolled up
   useEffect(() => {
@@ -108,12 +190,20 @@ function ChatWindow({ sessionId, theme }: ChatWindowProps) {
     }
   }, [messages]);
 
-  // Detect if user scrolled away from bottom
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     userScrolledUp.current = !atBottom;
+  };
+
+  const handleSuggestionClick = (text: string) => {
+    setInputValue(text);
+  };
+
+  const handleSend = (text: string) => {
+    sendMessage(text);
+    setInputValue('');
   };
 
   const hasMessages = messages.length > 0;
@@ -124,10 +214,13 @@ function ChatWindow({ sessionId, theme }: ChatWindowProps) {
         {!hasMessages ? (
           <WelcomeState
             key="welcome"
-            onSuggestionClick={sendMessage}
-            onSend={sendMessage}
+            onSuggestionClick={handleSuggestionClick}
+            inputValue={inputValue}
+            onInputChange={setInputValue}
+            onSend={handleSend}
             isLoading={isLoading}
             theme={theme}
+            suggestions={suggestions}
           />
         ) : (
           <>
@@ -149,6 +242,7 @@ function ChatWindow({ sessionId, theme }: ChatWindowProps) {
                       content={message.content}
                       isStreaming={message.isStreaming ?? false}
                       theme={theme}
+                      toolCalls={message.toolCalls}
                     />
                   ))}
                 </AnimatePresence>
@@ -157,7 +251,13 @@ function ChatWindow({ sessionId, theme }: ChatWindowProps) {
             </motion.div>
             <div className="px-4 sm:px-6 pb-5 pt-2">
               <div className="max-w-2xl mx-auto">
-                <ChatInput onSend={sendMessage} isLoading={isLoading} theme={theme} />
+                <ChatInput
+                  value={inputValue}
+                  onChange={setInputValue}
+                  onSend={handleSend}
+                  isLoading={isLoading}
+                  theme={theme}
+                />
               </div>
             </div>
           </>

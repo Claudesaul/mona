@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from chat import ChatManager
+from location_cache import get_names
 
 # Load .env from project root (parent of backend/)
 _project_root = Path(__file__).resolve().parent.parent
@@ -86,6 +87,12 @@ async def health_check():
     }
 
 
+@app.get("/api/locations")
+async def get_locations():
+    """Return cached location and account names for frontend suggestions."""
+    return get_names()
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """Non-streaming chat endpoint. Collects full response before returning."""
@@ -94,8 +101,9 @@ async def chat(request: ChatRequest):
 
     try:
         chunks = []
-        async for chunk in manager.send_message(request.message):
-            chunks.append(chunk)
+        async for event in manager.send_message(request.message):
+            if event.get("type") == "chunk":
+                chunks.append(event["content"])
 
         return ChatResponse(
             response="".join(chunks),
@@ -158,18 +166,9 @@ async def websocket_chat(websocket: WebSocket):
             manager = get_or_create_session(session_id)
 
             try:
-                async for chunk in manager.send_message(message):
-                    # Detect status messages (italicized query notifications)
-                    if chunk.startswith("\n\n*Querying") and chunk.endswith("*\n\n"):
-                        await websocket.send_json({
-                            "type": "status",
-                            "content": chunk.strip().strip("*").strip(),
-                        })
-                    else:
-                        await websocket.send_json({
-                            "type": "chunk",
-                            "content": chunk,
-                        })
+                async for event in manager.send_message(message):
+                    # Forward structured events directly to client
+                    await websocket.send_json(event)
 
                 await websocket.send_json({
                     "type": "done",

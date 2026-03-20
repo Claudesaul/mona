@@ -1,11 +1,17 @@
 import { useState, useCallback, useRef } from 'react';
 
+export interface ToolCall {
+  database: string;
+  query: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  toolCalls?: ToolCall[];
 }
 
 interface UseChatReturn {
@@ -25,6 +31,7 @@ export function useChat(sessionId: string): UseChatReturn {
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const assistantIdRef = useRef<string>('');
+  const isLoadingRef = useRef(false);
 
   const fallbackFetch = useCallback(
     async (text: string, assistantId: string) => {
@@ -61,6 +68,7 @@ export function useChat(sessionId: string): UseChatReturn {
         );
       } finally {
         setIsLoading(false);
+        isLoadingRef.current = false;
       }
     },
     [sessionId]
@@ -68,11 +76,10 @@ export function useChat(sessionId: string): UseChatReturn {
 
   const sendMessage = useCallback(
     (text: string) => {
-      if (!text.trim() || isLoading) return;
+      if (!text.trim() || isLoadingRef.current) return;
 
       setError(null);
 
-      // Add user message
       const userMessage: Message = {
         id: generateId(),
         role: 'user',
@@ -80,7 +87,6 @@ export function useChat(sessionId: string): UseChatReturn {
         timestamp: new Date(),
       };
 
-      // Add placeholder assistant message
       const assistantId = generateId();
       assistantIdRef.current = assistantId;
       const assistantMessage: Message = {
@@ -89,12 +95,13 @@ export function useChat(sessionId: string): UseChatReturn {
         content: '',
         timestamp: new Date(),
         isStreaming: true,
+        toolCalls: [],
       };
 
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setIsLoading(true);
+      isLoadingRef.current = true;
 
-      // Try WebSocket first
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
@@ -103,8 +110,17 @@ export function useChat(sessionId: string): UseChatReturn {
 
         let opened = false;
 
+        // Clear fallback timeout once WS is working
+        const fallbackTimer = setTimeout(() => {
+          if (ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+            fallbackFetch(text.trim(), assistantId);
+          }
+        }, 3000);
+
         ws.onopen = () => {
           opened = true;
+          clearTimeout(fallbackTimer);
           ws.send(
             JSON.stringify({
               session_id: sessionId,
@@ -117,12 +133,24 @@ export function useChat(sessionId: string): UseChatReturn {
           try {
             const data = JSON.parse(event.data);
 
-            if (data.type === 'chunk' || data.chunk) {
-              const chunk = data.chunk || data.content || data.text || '';
+            if (data.type === 'chunk') {
+              const chunk = data.content || '';
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantIdRef.current
                     ? { ...m, content: m.content + chunk }
+                    : m
+                )
+              );
+            } else if (data.type === 'tool_use') {
+              const toolCall: ToolCall = {
+                database: data.database || 'Unknown',
+                query: data.query || '',
+              };
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantIdRef.current
+                    ? { ...m, toolCalls: [...(m.toolCalls || []), toolCall] }
                     : m
                 )
               );
@@ -135,9 +163,10 @@ export function useChat(sessionId: string): UseChatReturn {
                 )
               );
               setIsLoading(false);
+              isLoadingRef.current = false;
               ws.close();
             } else if (data.type === 'error' || data.error) {
-              const errorMsg = data.error || data.message || 'Unknown error';
+              const errorMsg = data.error || data.content || data.message || 'Unknown error';
               setError(errorMsg);
               setMessages((prev) =>
                 prev.map((m) =>
@@ -151,18 +180,7 @@ export function useChat(sessionId: string): UseChatReturn {
                 )
               );
               setIsLoading(false);
-              ws.close();
-            } else if (data.type === 'message' || data.response) {
-              // Full message response (non-streaming)
-              const content = data.response || data.content || data.message || '';
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantIdRef.current
-                    ? { ...m, content, isStreaming: false }
-                    : m
-                )
-              );
-              setIsLoading(false);
+              isLoadingRef.current = false;
               ws.close();
             }
           } catch {
@@ -178,16 +196,16 @@ export function useChat(sessionId: string): UseChatReturn {
         };
 
         ws.onerror = () => {
+          clearTimeout(fallbackTimer);
           if (!opened) {
-            // WebSocket failed to connect -- fall back to HTTP
             fallbackFetch(text.trim(), assistantId);
           }
         };
 
         ws.onclose = (event) => {
           wsRef.current = null;
-          if (!event.wasClean && isLoading) {
-            // Abnormal close while still loading -- finalize
+          clearTimeout(fallbackTimer);
+          if (!event.wasClean && isLoadingRef.current) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantIdRef.current && m.isStreaming
@@ -196,22 +214,14 @@ export function useChat(sessionId: string): UseChatReturn {
               )
             );
             setIsLoading(false);
+            isLoadingRef.current = false;
           }
         };
-
-        // Timeout: if WS doesn't open in 3s, fall back
-        setTimeout(() => {
-          if (ws.readyState === WebSocket.CONNECTING) {
-            ws.close();
-            fallbackFetch(text.trim(), assistantId);
-          }
-        }, 3000);
       } catch {
-        // WebSocket constructor failed -- fall back
         fallbackFetch(text.trim(), assistantId);
       }
     },
-    [isLoading, sessionId, fallbackFetch]
+    [sessionId, fallbackFetch]
   );
 
   return { messages, sendMessage, isLoading, error };
