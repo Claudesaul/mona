@@ -36,7 +36,7 @@ User question → Claude API (tool_use) → picks database → writes query → 
 
 - **LightSpeed has NO price/revenue columns** — use Snowflake for financial questions
 - **product_activity has NO date column** — it's a rolling 14-day snapshot, don't filter by date
-- **Snowflake date keys are YYYYMMDD integers** — e.g., `VISITDATEKEY >= 20260318`
+- **Snowflake date keys are serial integers (days since 1899-12-31), NOT YYYYMMDD** — use VISITDATETIME/SALEDATETIME timestamps for date filtering
 - **Snowflake fact tables need dimension joins** for readable names (DIMLOCATION_V, DIMITEM_V, DIMROUTE_V)
 - **All queries are read-only** — INSERT/UPDATE/DELETE/DROP are blocked in code
 - **Row limits enforced** — TOP 500 (SQL Server), LIMIT 500 (PostgreSQL/Snowflake), LIMIT 200 (Salesforce)

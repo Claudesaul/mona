@@ -214,6 +214,8 @@ def execute_snowflake_query(query: str) -> list[dict]:
     try:
         conn = get_snowflake_connection()
         cursor = conn.cursor()
+        # Set statement timeout to 60 seconds
+        cursor.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 60")
         cursor.execute(query)
 
         if cursor.description is None:
