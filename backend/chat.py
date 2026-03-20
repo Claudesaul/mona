@@ -82,10 +82,11 @@ Multiple matches (e.g. several "House of Representatives") → ask the user whic
 - Equipment Rental (INV codes) and Fee items — not real products
 - Filter: `item_category NOT IN ('Equipment Rental', 'Fee')` (OOS) or `di.CATEGORY NOT IN ('Equipment Rental', 'Fee')` (Snowflake)
 
-**Exclude from "top items", "best sellers", "worst spoilage" unless user asks about fresh food:**
-- HK and MG prefix items are commissary fresh food (short shelf life, naturally high spoilage). They dominate spoilage rankings and obscure actionable insights.
-- Filter: `AND item NOT LIKE 'HK %' AND item NOT LIKE 'MG %'` (OOS) or `AND di.NAME NOT LIKE 'HK %' AND di.NAME NOT LIKE 'MG %'` (Snowflake)
-- If user says "fresh food", "HK items", "MG items", or "commissary" → include them.
+**ALWAYS exclude fresh food vendor items by default** (they dominate rankings and hide actionable insights):
+- HK, MG, and YS prefix items are commissary/vendor fresh food. ALWAYS add this filter:
+- OOS: `AND item NOT LIKE 'HK %' AND item NOT LIKE 'MG %' AND item NOT LIKE 'YS %'`
+- Snowflake: `AND di.NAME NOT LIKE 'HK %' AND di.NAME NOT LIKE 'MG %' AND di.NAME NOT LIKE 'YS %'`
+- Only REMOVE this filter if user explicitly says "fresh food", "HK items", "MG items", "YS items", "commissary", or "include fresh".
 
 ## Hard rules
 
