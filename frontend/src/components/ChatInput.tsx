@@ -53,11 +53,11 @@ function ChatInput({ value, onChange, onSend, isLoading, centered = false, theme
           border
           ${isDark
             ? value
-              ? 'bg-[#111113] border-white/[0.12] shadow-[0_0_0_1px_rgba(16,185,129,0.05),0_8px_50px_rgba(0,0,0,0.5)]'
-              : 'bg-[#111113] border-white/[0.07] shadow-[0_4px_30px_rgba(0,0,0,0.35)]'
+              ? 'bg-[#151518] border-white/[0.15] shadow-[0_0_0_1px_rgba(16,185,129,0.08),0_8px_50px_rgba(0,0,0,0.5)]'
+              : 'bg-[#151518] border-white/[0.12] shadow-[0_4px_30px_rgba(0,0,0,0.4)]'
             : value
-              ? 'bg-white border-gray-300/80 shadow-[0_0_0_1px_rgba(16,185,129,0.06),0_8px_40px_rgba(0,0,0,0.08)]'
-              : 'bg-white border-gray-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.05)]'
+              ? 'bg-white border-gray-300 shadow-[0_0_0_1px_rgba(16,185,129,0.08),0_8px_40px_rgba(0,0,0,0.1)]'
+              : 'bg-white border-gray-300 shadow-[0_4px_24px_rgba(0,0,0,0.06)]'
           }
         `}
       >
@@ -74,8 +74,8 @@ function ChatInput({ value, onChange, onSend, isLoading, centered = false, theme
               w-full resize-none bg-transparent outline-none leading-relaxed
               ${centered ? 'text-[15px] min-h-[56px]' : 'text-[14px]'}
               ${isDark
-                ? 'text-white/85 placeholder-white/20'
-                : 'text-gray-800 placeholder-gray-300'
+                ? 'text-white placeholder-white/35'
+                : 'text-gray-900 placeholder-gray-400'
               }
             `}
             style={{ maxHeight: centered ? '180px' : '120px' }}
@@ -103,8 +103,8 @@ function ChatInput({ value, onChange, onSend, isLoading, centered = false, theme
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.25)]'
                   : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-[0_2px_12px_rgba(16,185,129,0.3)]'
                 : isDark
-                  ? 'bg-white/[0.04] text-white/15'
-                  : 'bg-gray-100 text-gray-300'
+                  ? 'bg-white/[0.06] text-white/25'
+                  : 'bg-gray-100 text-gray-400'
               }
             `}
           >
@@ -126,7 +126,7 @@ function ChatInput({ value, onChange, onSend, isLoading, centered = false, theme
       </div>
 
       {centered && (
-        <p className={`text-[11px] text-center mt-4 ${isDark ? 'text-white/15' : 'text-gray-300'}`}>
+        <p className={`text-[11px] text-center mt-4 ${isDark ? 'text-white/30' : 'text-gray-400'}`}>
           Mona can make mistakes. Always verify important business data.
         </p>
       )}

@@ -31,11 +31,11 @@ function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls }
           relative text-[15px] leading-[1.75] rounded-2xl px-5 py-3 border
           ${isUser
             ? `max-w-[85%] ${isDark
-              ? 'bg-white/[0.08] border-white/[0.08] rounded-tr-lg text-white/85'
+              ? 'bg-white/[0.12] border-white/[0.12] rounded-tr-lg text-white'
               : 'bg-gray-900 border-gray-900 rounded-tr-lg text-white'}`
             : `max-w-[95%] ${isDark
-              ? 'bg-white/[0.03] border-white/[0.05] rounded-tl-lg text-white/80'
-              : 'bg-white border-gray-200/80 rounded-tl-lg text-gray-700 shadow-[0_1px_3px_rgba(0,0,0,0.04)]'}`
+              ? 'bg-white/[0.07] border-white/[0.09] rounded-tl-lg text-white/90'
+              : 'bg-white border-gray-200 rounded-tl-lg text-gray-800 shadow-[0_1px_4px_rgba(0,0,0,0.06)]'}`
           }
         `}
       >

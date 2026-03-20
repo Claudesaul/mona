@@ -52,8 +52,8 @@ function Header({ theme, toggleTheme, page, onNavigate }: HeaderProps) {
               className={`
                 px-4 py-1.5 rounded-full text-[13px] font-medium transition-all duration-200 cursor-pointer capitalize
                 ${page === p
-                  ? isDark ? 'bg-white/[0.1] text-white' : 'bg-black/[0.06] text-gray-900'
-                  : isDark ? 'text-white/40 hover:text-white/70 hover:bg-white/[0.05]' : 'text-gray-400 hover:text-gray-700 hover:bg-black/[0.03]'
+                  ? isDark ? 'bg-white/[0.12] text-white' : 'bg-black/[0.07] text-gray-900'
+                  : isDark ? 'text-white/50 hover:text-emerald-400 hover:bg-white/[0.06]' : 'text-gray-500 hover:text-emerald-600 hover:bg-black/[0.03]'
                 }
               `}
             >
@@ -68,13 +68,13 @@ function Header({ theme, toggleTheme, page, onNavigate }: HeaderProps) {
 
           <div className={`
             hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md border
-            ${isDark ? 'bg-white/[0.05] border-white/[0.07]' : 'bg-white/80 border-gray-200/60'}
+            ${isDark ? 'bg-white/[0.07] border-white/[0.1]' : 'bg-white/90 border-gray-200'}
           `}>
             <div className="relative">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               <div className="absolute inset-0 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping opacity-40" />
             </div>
-            <span className={`text-[11px] font-medium ${isDark ? 'text-white/45' : 'text-gray-400'}`}>Online</span>
+            <span className={`text-[11px] font-medium ${isDark ? 'text-white/60' : 'text-gray-500'}`}>Online</span>
           </div>
         </div>
       </div>

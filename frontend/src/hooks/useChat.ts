@@ -62,7 +62,7 @@ export function useChat(sessionId: string): UseChatReturn {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, content: `Sorry, I encountered an error: ${errorMsg}`, isStreaming: false }
+              ? { ...m, content: 'Something went wrong processing your request. Please try again.', isStreaming: false }
               : m
           )
         );
@@ -142,6 +142,16 @@ export function useChat(sessionId: string): UseChatReturn {
                     : m
                 )
               );
+            } else if (data.type === 'status') {
+              // Show status as italicized text during tool execution
+              const statusText = `\n\n*${data.content}*\n\n`;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantIdRef.current
+                    ? { ...m, content: m.content + statusText }
+                    : m
+                )
+              );
             } else if (data.type === 'tool_use') {
               const toolCall: ToolCall = {
                 database: data.database || 'Unknown',
@@ -166,16 +176,12 @@ export function useChat(sessionId: string): UseChatReturn {
               isLoadingRef.current = false;
               ws.close();
             } else if (data.type === 'error' || data.error) {
-              const errorMsg = data.error || data.content || data.message || 'Unknown error';
+              const errorMsg = data.error || data.content || data.message || 'Something went wrong. Please try again.';
               setError(errorMsg);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantIdRef.current
-                    ? {
-                        ...m,
-                        content: `Sorry, I encountered an error: ${errorMsg}`,
-                        isStreaming: false,
-                      }
+                    ? { ...m, content: errorMsg, isStreaming: false }
                     : m
                 )
               );

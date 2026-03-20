@@ -141,8 +141,8 @@ function ExplorePage({ theme, onAskQuestion }: ExplorePageProps) {
                       text-left px-4 py-3 rounded-xl text-[14px] leading-snug border cursor-pointer
                       transition-all duration-150
                       ${isDark
-                        ? 'text-white/50 bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:text-white/80 hover:border-white/[0.12]'
-                        : 'text-gray-500 bg-white border-gray-150 hover:bg-gray-50 hover:text-gray-800 hover:border-gray-300'
+                        ? 'text-white/60 bg-white/[0.04] border-white/[0.09] hover:bg-white/[0.08] hover:text-white hover:border-emerald-500/40'
+                        : 'text-gray-600 bg-white border-gray-200 hover:bg-gray-50 hover:text-gray-900 hover:border-emerald-500/50'
                       }
                     `}
                   >

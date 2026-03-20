@@ -218,6 +218,38 @@ When the user says → use this:
 """
 
 
+def _friendly_api_error(e: anthropic.APIError) -> str:
+    """Convert raw Anthropic API errors into clean user-facing messages."""
+    status = getattr(e, 'status_code', None)
+
+    if status == 400:
+        # Bad request — usually a conversation history issue
+        return (
+            "Something went wrong with our conversation history. "
+            "Try asking your question again, or start a new chat if the issue persists."
+        )
+    if status == 401:
+        return "There's a configuration issue on our end. Please notify the admin."
+    if status == 429:
+        return (
+            "I'm getting too many requests right now. "
+            "Give me a moment and try again in a few seconds."
+        )
+    if status == 500 or status == 503:
+        return (
+            "The AI service is temporarily unavailable. "
+            "This usually resolves quickly — try again in a moment."
+        )
+    if status == 529:
+        return (
+            "The AI service is currently overloaded. "
+            "Please try again in a minute or two."
+        )
+
+    # Generic fallback — still clean, no raw error dumps
+    return "Something went wrong processing your request. Please try again."
+
+
 def _sanitize_query(sql_query: str) -> str:
     """Validate that a query is read-only and block write operations."""
     query_upper = sql_query.strip().upper()
@@ -398,7 +430,8 @@ class ChatManager:
                     response_content = final_message.content
 
             except anthropic.APIError as e:
-                error_msg = f"\n\nI encountered an API error: {str(e)}. Please try again."
+                logger.exception("Anthropic API error (status=%s)", getattr(e, 'status_code', '?'))
+                error_msg = _friendly_api_error(e)
                 yield {"type": "chunk", "content": error_msg}
                 self.history.append({"role": "assistant", "content": error_msg})
                 return
@@ -479,12 +512,26 @@ class ChatManager:
     def _trim_history(self):
         """Trim history to prevent context window overflow.
 
-        Keeps the last 30 messages to maintain conversation context
-        while preventing unbounded growth from long sessions.
+        Keeps the last 30 messages while ensuring we never cut in the middle
+        of a tool_use/tool_result exchange, which would cause API errors.
         """
         max_messages = 30
-        if len(self.history) > max_messages:
-            self.history = self.history[-max_messages:]
+        if len(self.history) <= max_messages:
+            return
+
+        trimmed = self.history[-max_messages:]
+
+        # The first message must be role=user. If we cut into the middle of
+        # an assistant tool_use + user tool_result pair, drop forward until
+        # we find a clean user message (plain text, not tool_result).
+        while trimmed and (
+            trimmed[0]["role"] != "user"
+            or (isinstance(trimmed[0]["content"], list)
+                and any(b.get("type") == "tool_result" for b in trimmed[0]["content"]))
+        ):
+            trimmed.pop(0)
+
+        self.history = trimmed
 
     def _build_messages(self) -> list[dict]:
         """Build the messages list for the Claude API from conversation history."""

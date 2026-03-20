@@ -95,7 +95,7 @@ function WelcomeState({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className={`text-[15px] sm:text-base text-center mb-10 max-w-md font-light leading-relaxed ${isDark ? 'text-white/35' : 'text-gray-400'}`}
+        className={`text-[15px] sm:text-base text-center mb-10 max-w-md font-light leading-relaxed ${isDark ? 'text-white/50' : 'text-gray-500'}`}
       >
         Your AI assistant for Monumental Markets
       </motion.p>
@@ -136,8 +136,8 @@ function WelcomeState({
               suggestion-pill px-4 py-2.5 rounded-full text-[13px] font-medium border cursor-pointer
               transition-none
               ${isDark
-                ? 'text-white/40 bg-transparent border-white/[0.08] hover:bg-white hover:text-[#09090b] hover:border-white'
-                : 'text-gray-400 bg-transparent border-gray-200 hover:bg-gray-900 hover:text-white hover:border-gray-900'
+                ? 'text-white/55 bg-transparent border-white/[0.12] hover:bg-emerald-500 hover:text-white hover:border-emerald-500'
+                : 'text-gray-500 bg-transparent border-gray-300 hover:bg-emerald-600 hover:text-white hover:border-emerald-600'
               }
             `}
           >
@@ -233,7 +233,7 @@ function ChatWindow({ sessionId, theme, pendingQuestion, onPendingConsumed }: Ch
               animate={{ opacity: 1 }}
               transition={{ duration: 0.25 }}
             >
-              <div className="max-w-2xl mx-auto space-y-5">
+              <div className="max-w-4xl mx-auto space-y-5">
                 <AnimatePresence initial={false}>
                   {messages.map((message) => (
                     <MessageBubble
@@ -250,7 +250,7 @@ function ChatWindow({ sessionId, theme, pendingQuestion, onPendingConsumed }: Ch
               </div>
             </motion.div>
             <div className="px-4 sm:px-6 pb-5 pt-2">
-              <div className="max-w-2xl mx-auto">
+              <div className="max-w-4xl mx-auto">
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
