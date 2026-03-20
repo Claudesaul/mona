@@ -8,6 +8,7 @@ from urllib.parse import quote
 import pyodbc
 import psycopg2
 import psycopg2.extras
+import snowflake.connector
 from simple_salesforce import Salesforce
 from dotenv import load_dotenv
 
@@ -193,22 +194,22 @@ def execute_salesforce_query(soql_query: str) -> list[dict]:
 
 
 def get_snowflake_connection():
-    """Get a connection to the Snowflake SEED data warehouse."""
+    """Get a connection to the Snowflake SEED data warehouse using the Python connector."""
     username = os.getenv("Snowflake_USERNAME")
     password = os.getenv("Snowflake_PASSWORD")
     if not username or not password:
-        raise ValueError("Snowflake_USERNAME and Snowflake_PASSWORD must be set in .env")
+        raise ValueError("Snowflake credentials not configured")
 
-    conn_str = (
-        "DRIVER={SnowflakeDSIIDriver};"
-        "SERVER=kfc56636.us-east-1.snowflakecomputing.com;"
-        "DATABASE=PRD_SEED_DW_VIEW_SHARE_V1;"
-        "WAREHOUSE=PRD_SEED_OPERATOR_WH;"
-        "SCHEMA=PUBLIC;"
-        f"UID={username};"
-        f"PWD={password};"
+    return snowflake.connector.connect(
+        account="kfc56636.us-east-1",
+        user=username,
+        password=password,
+        database="PRD_SEED_DW_VIEW_SHARE_V1",
+        warehouse="PRD_SEED_OPERATOR_WH",
+        schema="PUBLIC",
+        login_timeout=30,
+        network_timeout=60,
     )
-    return pyodbc.connect(conn_str, timeout=60)
 
 
 def execute_snowflake_query(query: str) -> list[dict]:
@@ -218,7 +219,6 @@ def execute_snowflake_query(query: str) -> list[dict]:
     try:
         conn = get_snowflake_connection()
         cursor = conn.cursor()
-        # Set statement timeout to 60 seconds
         cursor.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 60")
         cursor.execute(query)
 
@@ -229,7 +229,7 @@ def execute_snowflake_query(query: str) -> list[dict]:
         rows = cursor.fetchall()
         return [dict(zip(columns, row)) for row in rows]
 
-    except pyodbc.Error as e:
+    except snowflake.connector.errors.Error as e:
         raise RuntimeError(f"Snowflake query error: {str(e)}") from e
     except Exception as e:
         raise RuntimeError(f"Snowflake error: {str(e)}") from e
