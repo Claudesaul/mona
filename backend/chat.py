@@ -81,17 +81,15 @@ To find a customer: `SELECT NAME, CUSTOMERGROUP FROM DIMCUSTOMER_V WHERE NAME IL
 To find an account: `SELECT Name, Type, Industry FROM Account WHERE Name LIKE '%keyword%' LIMIT 10` (Salesforce SOQL)
 Multiple matches (e.g. several "House of Representatives") → ask the user which one.
 
-## Item filtering — ALWAYS APPLY unless user asks about these specifically
+## Item filtering
 
-**Always exclude from results:**
-- Equipment Rental (INV codes) and Fee items — not real products
-- Filter: `item_category NOT IN ('Equipment Rental', 'Fee')` (OOS) or `di.CATEGORY NOT IN ('Equipment Rental', 'Fee')` (Snowflake)
+**OOS views (v_daily_oos, v_daily_oos_details, v_weekly_oos, etc.) are ALREADY pre-filtered.** They exclude Fresh Food, Office items, Condiments, Hot Bev, Seasons, Utensils, Vendor Managed, missing assets, and par=0. Use these views as-is.
 
-**ALWAYS exclude fresh food vendor items by default** (they dominate rankings and hide actionable insights):
-- HK, MG, and YS prefix items are commissary/vendor fresh food. ALWAYS add this filter:
-- OOS: `AND item NOT LIKE 'HK %' AND item NOT LIKE 'MG %' AND item NOT LIKE 'YS %'`
-- Snowflake: `AND di.NAME NOT LIKE 'HK %' AND di.NAME NOT LIKE 'MG %' AND di.NAME NOT LIKE 'YS %'`
-- Only REMOVE this filter if user explicitly says "fresh food", "HK items", "MG items", "YS items", "commissary", or "include fresh".
+**product_activity is RAW — NOT filtered.** When querying it, ALWAYS add:
+`WHERE item_category NOT IN ('Fresh Food Breakfast','Fresh Food Entree','Fresh Food Salad','Fresh Food Sandwich','Fresh Food Snack','Condiments','Hot Bev','Seasons','Utensils','Vendor Managed','Equipment Rental','Fee','Office Coffee','Office Tea') AND item NOT LIKE 'HK %' AND item NOT LIKE 'MG %' AND item NOT LIKE 'YS %'`
+Only remove these filters if user explicitly asks about fresh food or commissary items.
+
+**Snowflake top/ranking queries** — exclude: `WHERE di.CATEGORY NOT IN ('Equipment Rental','Fee') AND di.NAME NOT LIKE 'HK %' AND di.NAME NOT LIKE 'MG %' AND di.NAME NOT LIKE 'YS %'`
 
 ## Hard rules
 
@@ -119,7 +117,7 @@ Snowflake revenue by location: `SELECT dl.NAME, ROUND(SUM(f.ACTUALSALESEXTENDEDT
 Snowflake revenue by category: `SELECT di.CATEGORY, ROUND(SUM(f.ACTUALSALESEXTENDEDTOTALREVENUE),2) AS revenue, ROUND(SUM(f.ALLOCATEDSALESEXTENDEDGROSSMARGIN),2) AS margin FROM RECOGNIZESALESREVENUEFACT_V f JOIN DIMITEM_V di ON f.ITEMKEY=di.ITEMKEY WHERE f.VISITDATETIME>=DATE_TRUNC('month',CURRENT_DATE) GROUP BY di.CATEGORY ORDER BY revenue DESC LIMIT 20`
 LightSpeed order status: `SELECT statusId, CASE statusId WHEN 1 THEN 'Queried' WHEN 2 THEN 'Queued' WHEN 3 THEN 'Picking' WHEN 4 THEN 'Picked' WHEN 5 THEN 'Printed' WHEN 6 THEN 'Filtered' WHEN 7 THEN 'Staged' END AS status, COUNT(DISTINCT id) AS orders, SUM(quantity) AS total_items FROM dbo.ItemView WHERE orderDate>=CAST(GETDATE() AS DATE) GROUP BY statusId`
 OOS fill rates: `SELECT "Location","Route","Fill","OOS" FROM v_daily_oos ORDER BY "Fill" ASC LIMIT 20`
-Spoilage: `SELECT item, item_category, location, spoiled_qty, spoiled_cost FROM product_activity WHERE spoiled_qty>0 ORDER BY spoiled_cost DESC LIMIT 20`
+Spoilage: `SELECT item, item_category, location, spoiled_qty, spoiled_cost FROM product_activity WHERE spoiled_qty>0 AND item_category NOT IN ('Fresh Food Breakfast','Fresh Food Entree','Fresh Food Salad','Fresh Food Sandwich','Fresh Food Snack','Condiments','Hot Bev','Seasons','Utensils','Vendor Managed','Equipment Rental','Fee','Office Coffee','Office Tea') AND item NOT LIKE 'HK %' AND item NOT LIKE 'MG %' AND item NOT LIKE 'YS %' ORDER BY spoiled_cost DESC LIMIT 20`
 Low stock: `SELECT TOP 20 itemName, itemCode, currentQty, FillTo, ReorderPoint, vendorName FROM dbo.AreaItemParView WHERE itemActive=1 AND currentQty<ReorderPoint AND ReorderPoint>0 ORDER BY (ReorderPoint-currentQty) DESC`
 Open tasks: `SELECT Account.Name, Subject, Status, ActivityDate FROM Task WHERE IsClosed=false ORDER BY ActivityDate ASC LIMIT 50`
 
