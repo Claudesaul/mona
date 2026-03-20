@@ -4,9 +4,11 @@ Uses Anthropic Claude API with tool_use to query Monumental Markets business
 databases and provide analytical insights.
 """
 
+import asyncio
 import json
 import os
 import re
+import time
 import logging
 from datetime import datetime
 from typing import AsyncGenerator
@@ -21,8 +23,10 @@ from db.connections import (
     get_lightspeed_connection,
     get_level_connection,
     execute_salesforce_query,
+    search_sharepoint_files,
 )
 from db.schemas import get_schema_description
+from db.query_log import log_conversation, log_message, log_tool_call
 from tools.definitions import TOOLS
 import cache
 
@@ -55,6 +59,7 @@ Fill rate/OOS/spoilage/shrinkage/sell-through → **OOS** (PostgreSQL) — ONLY 
 Orders/picks/delivery status → **LightSpeed** dbo.ItemView (NO price data here)
 Warehouse stock/par/POs/receiving → **Level** (SQL Server)
 Accounts/contacts/tasks/cases/pipeline → **Salesforce** (SOQL)
+Files/reports/documents/templates/pricing sheets → **SharePoint** (search_sharepoint)
 "Who is this account?" / metadata lookup → **Snowflake** dimension tables or **Salesforce**
 
 ## Business types — STOP and CHECK before querying OOS for a specific account
@@ -127,6 +132,18 @@ inventory/stock → Level AreaItemParView currentQty | par level → Level FillT
 orders → LightSpeed dbo.ItemView | picks → LightSpeed dbo.ItemView statusId | POs → Level dbo.PurchaseOrder
 accounts → Salesforce Account | cases/installs → Salesforce Case | pipeline → Salesforce Opportunity
 location → Snowflake DIMLOCATION_V.NAME | route → Snowflake DIMROUTE_V.NAME | item/product → Snowflake DIMITEM_V.NAME
+file/report/document/template/sheet → SharePoint search_sharepoint
+
+## SharePoint files
+
+Three shared document libraries synced locally:
+- **Business Intelligence - Documents/** — Reporting (Daily/, Weekly/, Monthly/, Ad Hoc/, Scorecard/), Merchandising/, Pricing/, OCS to Seed/, Processes/, Cases/
+- **Customer Operations - Documents/** — Customer-facing docs
+- **Standards & Process - Documents/** — SOPs, standards
+
+When returning SharePoint search results, format each file as a clickable markdown download link using the download_url field:
+`[filename.xlsx](/api/files/Business%20Intelligence%20-%20Documents/path/to/file.xlsx)` — always use the download_url from the results as-is.
+Include the modified date and file size for context.
 
 ## Schemas
 {schemas}
@@ -239,6 +256,25 @@ def _execute_tool(tool_name: str, tool_input: dict) -> str:
             logger.exception("Salesforce query error")
             return json.dumps({"error": f"Salesforce error: {str(e)}"})
 
+    # SharePoint file search — no SQL involved
+    if tool_name == "search_sharepoint":
+        try:
+            results = search_sharepoint_files(
+                search_term=tool_input.get("search_term", ""),
+                folder=tool_input.get("folder", ""),
+                file_type=tool_input.get("file_type", ""),
+                modified_after=tool_input.get("modified_after", ""),
+                max_results=tool_input.get("max_results", 20),
+            )
+            return json.dumps(
+                {"file_count": len(results), "files": results},
+                default=str,
+                ensure_ascii=False,
+            )
+        except Exception as e:
+            logger.exception("SharePoint search error")
+            return json.dumps({"error": f"SharePoint search error: {str(e)}"})
+
     sql_query = tool_input.get("sql_query", "")
 
     try:
@@ -289,7 +325,7 @@ class ChatManager:
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.history: list[dict] = []
-        self.client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY env var
+        self.client = anthropic.AsyncAnthropic()  # Uses ANTHROPIC_API_KEY env var
         self.created_at = datetime.now().isoformat()
 
     def get_history(self) -> list[dict]:
@@ -308,8 +344,10 @@ class ChatManager:
                 - {"type": "tool_use", "database": "Snowflake", "query": "SELECT ..."}
                 - {"type": "status", "content": "Querying Snowflake database..."}
         """
-        # Add user message to history
+        # Add user message to history and log
         self.history.append({"role": "user", "content": user_message})
+        await asyncio.to_thread(log_conversation, self.session_id)
+        await asyncio.to_thread(log_message, self.session_id, "user", user_message)
 
         messages = self._build_messages()
         system_prompt = _build_system_prompt()
@@ -323,7 +361,7 @@ class ChatManager:
             text_chunks = []
 
             try:
-                with self.client.messages.stream(
+                async with self.client.messages.stream(
                     model=MODEL,
                     max_tokens=MAX_TOKENS,
                     system=system_prompt,
@@ -331,7 +369,7 @@ class ChatManager:
                     tools=TOOLS,
                 ) as stream:
                     current_text = ""
-                    for event in stream:
+                    async for event in stream:
                         if event.type == "content_block_start":
                             if event.content_block.type == "text":
                                 current_text = ""
@@ -347,7 +385,7 @@ class ChatManager:
                                 yield {"type": "chunk", "content": chunk}
 
                     # Get the final message to check for tool use
-                    final_message = stream.get_final_message()
+                    final_message = await stream.get_final_message()
                     response_content = final_message.content
 
             except anthropic.APIError as e:
@@ -362,10 +400,11 @@ class ChatManager:
 
             if not tool_use_blocks:
                 # No tool use - conversation turn is complete
-                # Save assistant response to history
+                # Save assistant response to history and log
                 full_text = "".join(text_chunks)
                 if full_text:
                     self.history.append({"role": "assistant", "content": full_text})
+                    await asyncio.to_thread(log_message, self.session_id, "assistant", full_text)
                 self._trim_history()
                 return
 
@@ -397,17 +436,33 @@ class ChatManager:
                     "query_oos": "OOS (PostgreSQL)",
                     "query_salesforce": "Salesforce",
                     "query_snowflake": "Snowflake",
+                    "search_sharepoint": "SharePoint Files",
                 }.get(block.name, block.name)
 
                 # Send status event
-                yield {"type": "status", "content": f"Querying {db_label} database..."}
+                status_verb = "Searching" if block.name == "search_sharepoint" else "Querying"
+                yield {"type": "status", "content": f"{status_verb} {db_label}..."}
 
                 # Send tool_use metadata so frontend can show query details
-                query_text = block.input.get("sql_query") or block.input.get("soql_query") or ""
+                query_text = block.input.get("sql_query") or block.input.get("soql_query") or block.input.get("search_term", "")
                 yield {"type": "tool_use", "database": db_label, "query": query_text}
 
-                # Execute the tool
-                result_str = _execute_tool(block.name, block.input)
+                # Execute the tool in a thread to avoid blocking the event loop
+                t0 = time.perf_counter()
+                result_str = await asyncio.to_thread(_execute_tool, block.name, block.input)
+                duration_ms = int((time.perf_counter() - t0) * 1000)
+
+                # Log the tool call
+                try:
+                    parsed = json.loads(result_str)
+                    rc = parsed.get("row_count") or parsed.get("file_count") or 0
+                    err = parsed.get("error")
+                except Exception:
+                    rc, err = 0, None
+                await asyncio.to_thread(
+                    log_tool_call, self.session_id, block.name, db_label,
+                    query_text, rc, duration_ms, err,
+                )
 
                 tool_results.append({
                     "type": "tool_result",

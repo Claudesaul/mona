@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -7,17 +8,56 @@ import type { Theme } from '@/hooks/useTheme';
 
 const REMARK_PLUGINS = [remarkGfm];
 
+function extractTablesAsCsv(markdown: string): string | null {
+  // Match markdown tables (header row | separator | data rows)
+  const tableRegex = /\|(.+)\|\r?\n\|[-| :]+\|\r?\n((?:\|.+\|\r?\n?)+)/g;
+  const tables: string[] = [];
+
+  let match;
+  while ((match = tableRegex.exec(markdown)) !== null) {
+    const headerLine = match[1];
+    const bodyBlock = match[2];
+
+    const headers = headerLine.split('|').map(h => h.trim()).filter(Boolean);
+    const rows = bodyBlock.trim().split('\n').map(row =>
+      row.split('|').map(c => c.trim()).filter(Boolean)
+    );
+
+    const csvRows = [
+      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','),
+      ...rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')),
+    ];
+    tables.push(csvRows.join('\n'));
+  }
+
+  return tables.length > 0 ? tables.join('\n\n') : null;
+}
+
+function downloadCsv(csv: string) {
+  // Add BOM for Excel UTF-8 compatibility
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mona_export_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
   content: string;
   isStreaming: boolean;
   theme?: Theme;
   toolCalls?: ToolCall[];
+  status?: string;
 }
 
-function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls }: MessageBubbleProps) {
+function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls, status }: MessageBubbleProps) {
   const isUser = role === 'user';
   const isDark = theme === 'dark';
+  const csvData = !isUser && !isStreaming && content ? extractTablesAsCsv(content) : null;
+  const handleExcelExport = useCallback(() => { if (csvData) downloadCsv(csvData); }, [csvData]);
 
   return (
     <motion.div
@@ -44,7 +84,14 @@ function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls }
             isUser ? (
               <span>{content}</span>
             ) : (
-              <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{content}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={REMARK_PLUGINS}
+                components={{
+                  a: ({ href, children }) => (
+                    <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                  ),
+                }}
+              >{content}</ReactMarkdown>
             )
           ) : isStreaming ? (
             <div className="flex items-center gap-1.5 py-1">
@@ -62,7 +109,18 @@ function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls }
           )}
         </div>
 
-        {isStreaming && content && (
+        {isStreaming && status && (
+          <div className={`flex items-center gap-2 mt-2 text-[13px] italic ${isDark ? 'text-emerald-400/60' : 'text-emerald-600/60'}`}>
+            <motion.span
+              className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-emerald-400/60' : 'bg-emerald-500/50'}`}
+              animate={{ opacity: [0.3, 1, 0.3] }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            {status}
+          </div>
+        )}
+
+        {isStreaming && content && !status && (
           <motion.span
             className="inline-block w-[3px] h-[16px] bg-emerald-500 rounded-full ml-1 align-middle"
             animate={{ opacity: [1, 0.2, 1] }}
@@ -73,6 +131,29 @@ function MessageBubble({ role, content, isStreaming, theme = 'dark', toolCalls }
         {/* Query transparency: show which databases/queries were used */}
         {!isUser && !isStreaming && toolCalls && toolCalls.length > 0 && (
           <QueryDetails toolCalls={toolCalls} theme={theme} />
+        )}
+
+        {/* Open in Excel button for tabular data */}
+        {csvData && (
+          <button
+            onClick={handleExcelExport}
+            className={`
+              mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium
+              transition-colors duration-150 cursor-pointer border
+              ${isDark
+                ? 'text-white/50 hover:text-white/80 border-white/[0.1] hover:bg-white/[0.06]'
+                : 'text-gray-500 hover:text-gray-700 border-gray-200 hover:bg-gray-50'
+              }
+            `}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="8" y1="13" x2="16" y2="13" />
+              <line x1="8" y1="17" x2="16" y2="17" />
+            </svg>
+            Open in Excel
+          </button>
         )}
       </div>
     </motion.div>

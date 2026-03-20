@@ -5,11 +5,13 @@ AI-powered business database queries using Claude with tool_use.
 """
 
 import json
+import mimetypes
 import os
 import uuid
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import unquote
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -18,8 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+import asyncio
+
 from chat import ChatManager
 from location_cache import get_names
+from db.query_log import init_db, get_recent_queries, get_stats
 
 # Load .env from project root (parent of backend/)
 _project_root = Path(__file__).resolve().parent.parent
@@ -42,6 +47,7 @@ def get_or_create_session(session_id: str) -> ChatManager:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
+    init_db()
     print("\n  Mona is running at http://0.0.0.0:8081\n")
     yield
     sessions.clear()
@@ -91,6 +97,58 @@ async def health_check():
 async def get_locations():
     """Return cached location and account names for frontend suggestions."""
     return get_names()
+
+
+@app.get("/api/logs/recent")
+async def get_recent_logs(limit: int = 50):
+    """Recent tool calls with conversation context."""
+    return await asyncio.to_thread(get_recent_queries, limit)
+
+
+@app.get("/api/logs/stats")
+async def get_log_stats():
+    """Usage statistics: queries by database, daily usage, top questions."""
+    return await asyncio.to_thread(get_stats)
+
+
+# SharePoint file download
+_SHAREPOINT_ROOT = os.getenv("SHAREPOINT_ROOT", "")
+_ALLOWED_LIBRARIES = [
+    "Business Intelligence - Documents",
+    "Customer Operations - Documents",
+    "Standards & Process - Documents",
+]
+
+
+@app.get("/api/files/{file_path:path}")
+async def download_file(file_path: str):
+    """Serve a file from the SharePoint-synced folder for download."""
+    if not _SHAREPOINT_ROOT:
+        raise HTTPException(status_code=500, detail="SharePoint not configured")
+
+    decoded_path = unquote(file_path)
+    root = Path(_SHAREPOINT_ROOT)
+    full_path = (root / decoded_path).resolve()
+
+    # Security: path must stay within SharePoint root
+    if not str(full_path).startswith(str(root.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Must be within an allowed library
+    rel_to_root = str(full_path.relative_to(root.resolve()))
+    if not any(rel_to_root.startswith(lib) for lib in _ALLOWED_LIBRARIES):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not full_path.exists() or not full_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    media_type, _ = mimetypes.guess_type(str(full_path))
+
+    return FileResponse(
+        path=str(full_path),
+        filename=full_path.name,
+        media_type=media_type or "application/octet-stream",
+    )
 
 
 @app.post("/api/chat", response_model=ChatResponse)

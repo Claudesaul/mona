@@ -46,6 +46,7 @@ function AboutPage({ theme }: AboutPageProps) {
             <li><strong className={heading}>LightSpeed/LEVEL</strong> — orders, fulfillment, warehouse inventory, and par levels</li>
             <li><strong className={heading}>OOS Database</strong> — fill rates and out-of-stock tracking</li>
             <li><strong className={heading}>Salesforce</strong> — accounts, contacts, tasks, cases, opportunities</li>
+            <li><strong className={heading}>SharePoint</strong> — shared drive files, reports, pricing sheets, process documents</li>
           </ul>
         </motion.section>
 

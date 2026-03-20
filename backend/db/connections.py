@@ -1,6 +1,10 @@
-"""Database connection functions for LightSpeed, Level, OOS, Salesforce, and Snowflake."""
+"""Database connection functions for LightSpeed, Level, OOS, Salesforce, Snowflake, and SharePoint."""
 
 import os
+from pathlib import Path
+from datetime import datetime
+from urllib.parse import quote
+
 import pyodbc
 import psycopg2
 import psycopg2.extras
@@ -240,3 +244,109 @@ def execute_snowflake_query(query: str) -> list[dict]:
                 conn.close()
             except Exception:
                 pass
+
+
+# SharePoint document libraries allowed for search
+_SHAREPOINT_LIBRARIES = [
+    "Business Intelligence - Documents",
+    "Customer Operations - Documents",
+    "Standards & Process - Documents",
+]
+
+
+def search_sharepoint_files(
+    search_term: str,
+    folder: str = "",
+    file_type: str = "",
+    modified_after: str = "",
+    max_results: int = 20,
+) -> list[dict]:
+    """Search SharePoint-synced files by name, folder, type, and date."""
+    root = os.getenv("SHAREPOINT_ROOT", "")
+    if not root:
+        raise ValueError("SHAREPOINT_ROOT not configured in .env")
+
+    root_path = Path(root)
+    if not root_path.exists():
+        raise ValueError(f"SharePoint root not found: {root}")
+
+    # Determine search roots
+    if folder:
+        search_root = root_path / folder
+        resolved = search_root.resolve()
+        if not any(
+            str(resolved).startswith(str((root_path / lib).resolve()))
+            for lib in _SHAREPOINT_LIBRARIES
+        ):
+            raise ValueError("Folder must be within an allowed document library.")
+        search_roots = [search_root] if search_root.exists() else []
+    else:
+        search_roots = [
+            root_path / lib for lib in _SHAREPOINT_LIBRARIES
+            if (root_path / lib).exists()
+        ]
+
+    # Parse date filter
+    date_filter = None
+    if modified_after:
+        date_filter = datetime.strptime(modified_after, "%Y-%m-%d")
+
+    # File type filter
+    ext_filter = file_type.lower().lstrip(".") if file_type else ""
+
+    max_results = min(max_results or 20, 50)
+    search_lower = search_term.lower()
+    results = []
+
+    for sr in search_roots:
+        for dirpath, dirnames, filenames in os.walk(sr):
+            # Skip hidden/system folders
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+            for fname in filenames:
+                if fname.startswith(".") or fname.startswith("~$"):
+                    continue
+
+                if search_lower not in fname.lower():
+                    continue
+
+                if ext_filter and not fname.lower().endswith(f".{ext_filter}"):
+                    continue
+
+                full_path = Path(dirpath) / fname
+
+                try:
+                    stat = full_path.stat()
+                except OSError:
+                    continue
+
+                modified = datetime.fromtimestamp(stat.st_mtime)
+
+                if date_filter and modified < date_filter:
+                    continue
+
+                rel_path = full_path.relative_to(root_path)
+                url_path = quote(str(rel_path).replace("\\", "/"), safe="/")
+
+                results.append({
+                    "name": fname,
+                    "path": str(rel_path).replace("\\", "/"),
+                    "folder": str(Path(dirpath).relative_to(root_path)).replace("\\", "/"),
+                    "size_kb": round(stat.st_size / 1024, 1),
+                    "modified": modified.strftime("%Y-%m-%d %H:%M"),
+                    "type": full_path.suffix.lstrip(".").lower(),
+                    "download_url": f"/api/files/{url_path}",
+                })
+
+                if len(results) >= max_results:
+                    break
+
+            if len(results) >= max_results:
+                break
+
+        if len(results) >= max_results:
+            break
+
+    # Most recent first
+    results.sort(key=lambda x: x["modified"], reverse=True)
+    return results

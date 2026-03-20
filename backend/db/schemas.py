@@ -173,6 +173,25 @@ SCHEMAS = {
             },
         },
     },
+    "sharepoint": {
+        "name": "SharePoint Files",
+        "type": "File Search",
+        "description": "Shared drive files synced via OneDrive. ~9,100 files across 3 document libraries. Search by filename keyword, folder, file type, modified date. Returns metadata + download links (not file contents).",
+        "tables": {
+            "Business Intelligence - Documents": {
+                "description": "Main BI library. Subfolders: Reporting (Daily, Weekly, Monthly, Ad Hoc, Scorecard), Merchandising, Pricing, OCS to Seed, Processes, Cases.",
+                "columns": "xlsx (5,738), xlsm (1,587), csv (190), docx (282), pdf (214), pptx (20)",
+            },
+            "Customer Operations - Documents": {
+                "description": "Customer operations documentation and resources.",
+                "columns": "Mixed file types",
+            },
+            "Standards & Process - Documents": {
+                "description": "SOPs, standards, process documentation.",
+                "columns": "Mixed file types",
+            },
+        },
+    },
 }
 
 

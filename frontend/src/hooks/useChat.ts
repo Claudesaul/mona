@@ -12,6 +12,7 @@ export interface Message {
   timestamp: Date;
   isStreaming?: boolean;
   toolCalls?: ToolCall[];
+  status?: string;
 }
 
 interface UseChatReturn {
@@ -138,17 +139,15 @@ export function useChat(sessionId: string): UseChatReturn {
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantIdRef.current
-                    ? { ...m, content: m.content + chunk }
+                    ? { ...m, content: m.content + chunk, status: undefined }
                     : m
                 )
               );
             } else if (data.type === 'status') {
-              // Show status as italicized text during tool execution
-              const statusText = `\n\n*${data.content}*\n\n`;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantIdRef.current
-                    ? { ...m, content: m.content + statusText }
+                    ? { ...m, status: data.content }
                     : m
                 )
               );

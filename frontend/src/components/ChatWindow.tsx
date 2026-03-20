@@ -202,6 +202,7 @@ function ChatWindow({ sessionId, theme, pendingQuestion, onPendingConsumed }: Ch
   };
 
   const handleSend = (text: string) => {
+    userScrolledUp.current = false;
     sendMessage(text);
     setInputValue('');
   };
@@ -243,6 +244,7 @@ function ChatWindow({ sessionId, theme, pendingQuestion, onPendingConsumed }: Ch
                       isStreaming={message.isStreaming ?? false}
                       theme={theme}
                       toolCalls={message.toolCalls}
+                      status={message.status}
                     />
                   ))}
                 </AnimatePresence>

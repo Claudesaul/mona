@@ -114,4 +114,47 @@ TOOLS = [
             "required": ["soql_query"],
         },
     },
+    {
+        "name": "search_sharepoint",
+        "description": (
+            "Search shared drive files (SharePoint synced via OneDrive). "
+            "Covers 3 document libraries: Business Intelligence, Customer Operations, Standards & Process. "
+            "~9,100 files: Excel reports (xlsx/xlsm), Word docs (docx), PDFs, CSVs, PowerPoints. "
+            "Use for: finding reports, pricing files, templates, process docs, merchandising sheets. "
+            "Returns file metadata with download links. Does NOT read file contents."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "search_term": {
+                    "type": "string",
+                    "description": (
+                        "Filename or keyword to search for (case-insensitive, partial match). "
+                        "Examples: 'OCS report', 'pricing', 'spoilage', 'weekly sales'"
+                    ),
+                },
+                "folder": {
+                    "type": "string",
+                    "description": (
+                        "Optional folder path to narrow search (relative to root). "
+                        "Examples: 'Business Intelligence - Documents/Reporting/Daily', "
+                        "'Customer Operations - Documents'. Empty = search all libraries."
+                    ),
+                },
+                "file_type": {
+                    "type": "string",
+                    "description": "Optional file extension filter: 'xlsx', 'pdf', 'docx', 'csv'. Empty = all types.",
+                },
+                "modified_after": {
+                    "type": "string",
+                    "description": "Optional date filter (YYYY-MM-DD). Only files modified on or after this date.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Max files to return (default 20, max 50).",
+                },
+            },
+            "required": ["search_term"],
+        },
+    },
 ]

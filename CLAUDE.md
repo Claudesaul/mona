@@ -20,7 +20,7 @@ User question → Claude API (tool_use) → picks database → writes query → 
 
 **Backend:** FastAPI + uvicorn. WebSocket streaming at `/ws/chat`. REST fallback at `/api/chat`.
 
-**AI:** Claude Sonnet 4.6 with 5 tool definitions (one per database). System prompt contains database routing table, schemas, join patterns, and common formulas.
+**AI:** Claude Sonnet 4.6 with 6 tool definitions (5 databases + SharePoint file search). System prompt contains database routing table, schemas, join patterns, and common formulas.
 
 ### Connected Databases
 
@@ -31,6 +31,7 @@ User question → Claude API (tool_use) → picks database → writes query → 
 | Level | SQL Server | Warehouse inventory, par levels, purchase orders | `10.216.207.32` |
 | OOS | PostgreSQL | Fill rates, OOS tracking, product activity (14-day rolling) | `10.7.6.146:5432` |
 | Salesforce | SOQL | Accounts, contacts, tasks, cases, opportunities | `simple-salesforce` |
+| SharePoint | File Search | Shared drive files, reports, templates (~9.1K files) | OneDrive sync (local) |
 
 ## IMPORTANT Rules
 
@@ -106,6 +107,7 @@ DB_USERNAME, DB_PASSWORD   # SQL Server (LightSpeed/Level)
 PG_HOST, PG_PORT, PG_DATABASE, PG_USERNAME, PG_PASSWORD  # PostgreSQL
 SF_USERNAME, SF_PASSWORD   # Salesforce
 Snowflake_USERNAME, Snowflake_PASSWORD  # Snowflake
+SHAREPOINT_ROOT                        # Path to OneDrive-synced SharePoint folder
 ```
 
 ## Style
