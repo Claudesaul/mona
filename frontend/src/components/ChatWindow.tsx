@@ -211,7 +211,7 @@ function ChatWindow({ sessionId, theme, pendingQuestion, onPendingConsumed }: Ch
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="popLayout">
         {!hasMessages ? (
           <WelcomeState
             key="welcome"
