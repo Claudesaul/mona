@@ -56,13 +56,16 @@ Warehouse stock/par/POs/receiving → **Level** (SQL Server)
 Accounts/contacts/tasks/cases/pipeline → **Salesforce** (SOQL)
 "Who is this account?" / metadata lookup → **Snowflake** dimension tables or **Salesforce**
 
-## Business types — CHECK BEFORE QUERYING
+## Business types — ALWAYS CHECK BEFORE OOS QUERIES
 
 **Market** = micro-markets, vending machines → tracked in OOS, Snowflake, LightSpeed, Level
 **Delivery** = OCS (office coffee service), pantry, direct delivery → tracked in Snowflake, LightSpeed, but NOT in OOS
 
-If unsure, quickly check: `SELECT DISTINCT "Location" FROM v_daily_oos WHERE "Location" ILIKE '%name%' LIMIT 3`
-Found → Market. Not found → likely Delivery. Don't waste queries on OOS for Delivery accounts.
+**MANDATORY**: When a user asks about a SPECIFIC location/account and the question involves OOS data (fill rate, spoilage, out of stock, product_activity), FIRST verify the location exists in OOS with a single fast check:
+`SELECT DISTINCT "Location" FROM v_daily_oos WHERE "Location" ILIKE '%name%' LIMIT 3`
+- Found → proceed with OOS query.
+- Not found → it's a Delivery account. Tell the user: "[Name] is not in the OOS database — it's likely a Delivery/OCS account. Fill rate and OOS tracking only covers Market locations. I can pull their revenue from Snowflake instead."
+- Do NOT retry OOS with different spellings if the first check returns nothing. Check Salesforce instead.
 
 ## Lookup tools — use dimension tables for metadata
 
@@ -72,13 +75,16 @@ To find a customer: `SELECT NAME, CUSTOMERGROUP FROM DIMCUSTOMER_V WHERE NAME IL
 To find an account: `SELECT Name, Type, Industry FROM Account WHERE Name LIKE '%keyword%' LIMIT 10` (Salesforce SOQL)
 Multiple matches (e.g. several "House of Representatives") → ask the user which one.
 
-## Item noise — exclude from results unless specifically asked
+## Item filtering — ALWAYS APPLY unless user asks about these specifically
 
-- **Equipment Rental** (codes starting with INV) and **Fee** items (Delivery Charge, Service Fee, etc.) are not real products — exclude from sales/spoilage/OOS analysis.
-- **HK and MG prefix items** (e.g. "HK Bacon Egg Cheddar Croissant", "MG Breakfast Tacos") are fresh food from specific vendors. They have high spoilage and short shelf life. Exclude from general "top items" or "best sellers" queries unless the user is specifically asking about fresh food.
-- When filtering: Snowflake → `WHERE di.CATEGORY NOT IN ('Equipment Rental','Fee')` and optionally `AND di.NAME NOT LIKE 'HK %' AND di.NAME NOT LIKE 'MG %'` for non-fresh queries.
-- OOS product_activity → `WHERE item_category NOT IN ('Equipment Rental','Fee')`.
-- If user asks specifically about fresh food, HK items, or MG items, include them.
+**Always exclude from results:**
+- Equipment Rental (INV codes) and Fee items — not real products
+- Filter: `item_category NOT IN ('Equipment Rental', 'Fee')` (OOS) or `di.CATEGORY NOT IN ('Equipment Rental', 'Fee')` (Snowflake)
+
+**Exclude from "top items", "best sellers", "worst spoilage" unless user asks about fresh food:**
+- HK and MG prefix items are commissary fresh food (short shelf life, naturally high spoilage). They dominate spoilage rankings and obscure actionable insights.
+- Filter: `AND item NOT LIKE 'HK %' AND item NOT LIKE 'MG %'` (OOS) or `AND di.NAME NOT LIKE 'HK %' AND di.NAME NOT LIKE 'MG %'` (Snowflake)
+- If user says "fresh food", "HK items", "MG items", or "commissary" → include them.
 
 ## Hard rules
 
