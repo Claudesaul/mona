@@ -311,10 +311,11 @@ def _execute_tool(tool_name: str, tool_input: dict) -> str:
         return result_str
 
     except RuntimeError as e:
-        return json.dumps({"error": str(e)})
+        logger.error("Runtime error in %s: %s", tool_name, e)
+        return json.dumps({"error": "Database query failed. The database may be temporarily unavailable."})
     except Exception as e:
         logger.exception("Unexpected error executing tool %s", tool_name)
-        return json.dumps({"error": f"Unexpected error: {str(e)}"})
+        return json.dumps({"error": "Could not connect to the database. It may be temporarily unavailable."})
 
 
 class ChatManager:
